@@ -1,0 +1,68 @@
+[project]
+name = "ariadne-backend"
+version = "0.1.0"
+description = "Ariadne — Code Documentation Assistant (RAG over a codebase)"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "sse-starlette>=2.1",
+  "pydantic>=2.9",
+  "pydantic-settings>=2.5",
+  "sqlalchemy[asyncio]>=2.0.35",
+  "asyncpg>=0.30",
+  "alembic>=1.14",
+  "qdrant-client>=1.12",
+  "redis>=5.2",
+  "taskiq>=0.11",
+  "taskiq-redis>=1.0",
+  "langchain>=0.3,<0.4",
+  "langchain-core>=0.3,<0.4",
+  "langchain-google-genai>=2.0",
+  "langgraph>=0.2.50",
+  "fastembed>=0.4",
+  "tree-sitter>=0.23",
+  "tree-sitter-language-pack>=0.4",
+  "pathspec>=0.12",
+  "structlog>=24.4",
+  "tenacity>=9.0",
+  "opentelemetry-api>=1.27",
+  "opentelemetry-sdk>=1.27",
+  "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "ruff>=0.7",
+  "mypy>=1.13",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+ignore = ["B008"]  # FastAPI Depends() in defaults is idiomatic
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+  "integration: requires live services / network (run explicitly: pytest -m integration)",
+]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]

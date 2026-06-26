@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+npm-debug.log*
+
+# Env & secrets — NEVER commit
+.env
+.env.*
+!.env.example
+
+# Data / volumes
+*.sqlite
+*.db
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+
+# Local clones / uploads handled at runtime
+backend/.cache/
+/tmp_repos/
