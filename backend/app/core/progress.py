@@ -19,8 +19,12 @@ def channel(repo_id: str) -> str:
 
 
 async def publish(repo_id: str, event: dict) -> None:
-    client = redis.from_url(get_settings().redis_url)
+    # Best-effort: progress streaming must never break ingestion if Redis is unavailable.
     try:
-        await client.publish(channel(repo_id), json.dumps(event))
-    finally:
-        await client.aclose()
+        client = redis.from_url(get_settings().redis_url)
+        try:
+            await client.publish(channel(repo_id), json.dumps(event))
+        finally:
+            await client.aclose()
+    except Exception:  # noqa: BLE001
+        pass

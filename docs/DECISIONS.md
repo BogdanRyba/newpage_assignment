@@ -12,6 +12,20 @@ credentials, and gives integration tests a deterministic retrieval substrate (co
 with cassettes for the LLM). **Trade-off:** lexical-overlap quality only — never a default
 for real use; Gemini stays the default provider.
 
+### D-013 · Eval determinism: local embedder + recorded LLM cassettes
+The eval-runner computes retrieval metrics (recall@k, MRR) with the deterministic local
+embedder (offline, no key) so the CI gate always bites; answer metrics (citation-validity,
+faithfulness via LLM-as-judge) replay recorded Gemini cassettes. **Why:** a quality gate that
+needs a paid key or flakes on LLM nondeterminism isn't a gate. **Trade-off:** cassettes must be
+re-recorded when a prompt/version changes (the VERSION tags make that traceable).
+
+### D-012 · Scope refusal via a `NO_ANSWER` sentinel
+Empty retrieval rarely happens (a vector store always returns top-k), so off-topic questions
+weren't refused. The synthesis prompt now instructs the model to emit exactly `NO_ANSWER` when
+the sources don't cover the question; the critic converts that to a clean refusal. **Why:** a
+robust, provider-agnostic scope gate beats a brittle similarity threshold that needs per-model
+calibration. **Trade-off:** relies on instruction-following — covered by a recorded prompt test.
+
 ### D-010 · `python-multipart` dependency
 Added for the `.zip` upload endpoint (FastAPI form/file parsing). **Why:** the design
 offers "drop a .zip" alongside clone-by-URL. **Trade-off:** one small dependency; trivial.

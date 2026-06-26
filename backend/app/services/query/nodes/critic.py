@@ -33,6 +33,15 @@ def scope_refuse_node(deps: Deps) -> Node:
 def critic_node(deps: Deps) -> Node:
     @instrument("critic")
     async def _node(state: QueryState) -> dict:
+        # LLM scope gate: the generator emits NO_ANSWER when the sources don't cover the
+        # question (off-topic / not in this repo). Convert it to a clean refusal.
+        if state.draft.strip().upper().startswith("NO_ANSWER"):
+            return {
+                "answer": Answer(
+                    text=refusal(state.repo_name), refused=True, refusal_reason="no_sources"
+                )
+            }
+
         check = check_validity(state.draft, state.sources)
         verdict = await _faithfulness(deps, state)
         accepted = check.is_valid and verdict["pass"]

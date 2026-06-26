@@ -1,0 +1,35 @@
+{
+  "repo": "ariadne-sample",
+  "cases": [
+    {
+      "question": "How does the calculator add a value to its running total?",
+      "expected_files": ["calculator.py"],
+      "expected_symbols": ["add", "Calculator"],
+      "expect_refusal": false
+    },
+    {
+      "question": "What happens when you divide by zero?",
+      "expected_files": ["calculator.py"],
+      "expected_symbols": ["divide"],
+      "expect_refusal": false
+    },
+    {
+      "question": "How is the running total reset?",
+      "expected_files": ["calculator.py"],
+      "expected_symbols": ["reset"],
+      "expect_refusal": false
+    },
+    {
+      "question": "How does the tokenizer classify a token as a number or word?",
+      "expected_files": ["tokens.ts"],
+      "expected_symbols": ["classify", "tokenize"],
+      "expect_refusal": false
+    },
+    {
+      "question": "How do I deploy this service to Kubernetes with autoscaling?",
+      "expected_files": [],
+      "expected_symbols": [],
+      "expect_refusal": true
+    }
+  ]
+}

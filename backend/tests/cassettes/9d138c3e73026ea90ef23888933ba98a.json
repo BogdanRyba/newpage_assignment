@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "When dividing by zero (where the `denominator` is `0`), the `divide` function raises a `ZeroDivisionError` with the message \"cannot divide by zero\" [1]."
+}

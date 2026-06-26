@@ -34,8 +34,12 @@ async def _ready_repo_with_file() -> str:
         repo = await RepoRepository(session).create(name="apitest", source_url=None)
         await RepoRepository(session).set_status(repo.id, "ready")
         await FileRepository(session).upsert(
-            repo_id=repo.id, path="calculator.py", lang="python",
-            size=len(FILE_CONTENT), sha256="x" * 64, content=FILE_CONTENT,
+            repo_id=repo.id,
+            path="calculator.py",
+            lang="python",
+            size=len(FILE_CONTENT),
+            sha256="x" * 64,
+            content=FILE_CONTENT,
         )
     return repo.id
 

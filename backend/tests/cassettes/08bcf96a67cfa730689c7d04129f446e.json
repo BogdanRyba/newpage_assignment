@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "The tokenizer classifies a token using the `classify` function, which tests the raw string against regular expressions [1]:\n- A token is classified as a `\"number\"` if it matches `/^\\d+$/` (consisting only of digits) [1].\n- A token is classified as a `\"word\"` if it matches `/^[A-Za-z]+$/` (consisting only of letters) [1].\n- If it matches neither, it is classified as a `\"symbol\"` [1]."
+}

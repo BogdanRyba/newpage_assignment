@@ -12,9 +12,12 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
+from opentelemetry import trace
+
 from app.core.logging import daedalus_logger
 
 T = TypeVar("T")
+_tracer = trace.get_tracer("daedalus")
 
 
 def instrument(name: str) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
@@ -23,11 +26,12 @@ def instrument(name: str) -> Callable[[Callable[..., Awaitable[T]]], Callable[..
         async def wrapper(*args, **kwargs) -> T:
             log = daedalus_logger()
             start = time.perf_counter()
-            try:
-                result = await fn(*args, **kwargs)
-            except Exception as exc:
-                log.error("node_error", node=name, error=str(exc))
-                raise
+            with _tracer.start_as_current_span(f"node.{name}"):
+                try:
+                    result = await fn(*args, **kwargs)
+                except Exception as exc:
+                    log.error("node_error", node=name, error=str(exc))
+                    raise
             log.info("node", node=name, ms=round((time.perf_counter() - start) * 1000, 1))
             return result
 

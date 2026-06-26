@@ -26,6 +26,9 @@ log = get_logger("api")
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     configure_logging()
+    from app.core.observability import setup_tracing
+
+    setup_tracing("ariadne-api")
     # Connect the Taskiq broker so the API can enqueue ingest jobs.
     if not broker.is_worker_process:
         await broker.startup()

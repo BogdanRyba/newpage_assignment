@@ -90,6 +90,9 @@ class QdrantVectorStore:
         if await self._client.collection_exists(ctx.qdrant_collection):
             await self._client.delete_collection(ctx.qdrant_collection)
 
+    async def aclose(self) -> None:
+        await self._client.close()
+
 
 def _to_scored(points: list) -> list[ScoredPoint]:
     return [ScoredPoint(id=str(p.id), score=p.score, payload=p.payload or {}) for p in points]

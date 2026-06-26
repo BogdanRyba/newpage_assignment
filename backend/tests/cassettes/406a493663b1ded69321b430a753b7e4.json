@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "The function `f` is a Python function that returns the integer `1` [1]."
+}

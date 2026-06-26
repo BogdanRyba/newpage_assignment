@@ -26,13 +26,37 @@ jobs:
       - name: Tests (deterministic — cassette replay, no live services)
         env:
           CASSETTE_MODE: replay
+          EMBEDDING_PROVIDER: local
         run: pytest -m "not integration" -q
 
-  evals:
+  integration:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ariadne
+          POSTGRES_PASSWORD: ariadne
+          POSTGRES_DB: ariadne
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ariadne" --health-interval 5s
+          --health-timeout 3s --health-retries 15
+      qdrant:
+        image: qdrant/qdrant:v1.12.4
+        ports: ["6333:6333"]
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    env:
+      DATABASE_URL: postgresql+asyncpg://ariadne:ariadne@localhost:5432/ariadne
+      QDRANT_URL: http://localhost:6333
+      REDIS_URL: redis://localhost:6379/0
+      EMBEDDING_PROVIDER: local
+      CASSETTE_MODE: replay
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -42,11 +66,12 @@ jobs:
         run: |
           pip install uv
           uv pip install --system ".[dev]"
+      - name: Migrate
+        run: alembic upgrade head
+      - name: Integration tests (real Postgres + Qdrant, offline LLM via cassettes)
+        run: pytest -m integration -q
       - name: Eval gate (recall@k / MRR / faithfulness / citation-validity)
-        env:
-          CASSETTE_MODE: replay
-        # Fails the build if metrics drop below thresholds. Wired in Phase 4.
-        run: python -m evals.run --check-thresholds || echo "eval-runner lands in Phase 4"
+        run: python -m evals.run --check-thresholds
 
   frontend:
     runs-on: ubuntu-latest
