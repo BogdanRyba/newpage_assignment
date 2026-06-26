@@ -12,8 +12,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.chat import router as chat_router
 from app.api.health import router as health_router
 from app.api.repos import router as repos_router
+from app.api.source import router as source_router
 from app.core.errors import register_error_handlers
 from app.core.logging import configure_logging, get_logger
 from app.ingestion.tasks import broker
@@ -49,8 +51,8 @@ def create_app() -> FastAPI:
     register_error_handlers(app)
     app.include_router(health_router)
     app.include_router(repos_router)
-
-    # chat + source routers register here in Phase 2.
+    app.include_router(chat_router)
+    app.include_router(source_router)
     return app
 
 

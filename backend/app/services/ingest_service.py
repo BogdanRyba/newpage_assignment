@@ -159,6 +159,7 @@ class IngestService:
                         "lang": ch.lang,
                         "start_line": ch.start_line,
                         "end_line": ch.end_line,
+                        "index": ch.index,
                         "text": ch.text,
                     },
                 )
