@@ -5,6 +5,17 @@ This feeds README section (e) — but the README is written in my own words, not
 
 ---
 
+### D-011 · Deterministic local embedder (`EMBEDDING_PROVIDER=local`)
+A hashed bag-of-tokens dense + sparse embedder with no network/key/model-download.
+**Why:** lets the full ingest + retrieval pipeline run in CI and demo with zero
+credentials, and gives integration tests a deterministic retrieval substrate (combined
+with cassettes for the LLM). **Trade-off:** lexical-overlap quality only — never a default
+for real use; Gemini stays the default provider.
+
+### D-010 · `python-multipart` dependency
+Added for the `.zip` upload endpoint (FastAPI form/file parsing). **Why:** the design
+offers "drop a .zip" alongside clone-by-URL. **Trade-off:** one small dependency; trivial.
+
 ### D-009 · Prompts are first-class versioned artifacts
 Each LLM call uses a dedicated prompt module under `app/prompts/` with explicit role/context/
 constraints/output_format sections and a `VERSION`. **Why:** prompts are where most RAG behaviour and

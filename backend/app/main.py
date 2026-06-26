@@ -13,8 +13,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
+from app.api.repos import router as repos_router
 from app.core.errors import register_error_handlers
 from app.core.logging import configure_logging, get_logger
+from app.ingestion.tasks import broker
 
 log = get_logger("api")
 
@@ -22,8 +24,13 @@ log = get_logger("api")
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     configure_logging()
+    # Connect the Taskiq broker so the API can enqueue ingest jobs.
+    if not broker.is_worker_process:
+        await broker.startup()
     log.info("startup")
     yield
+    if not broker.is_worker_process:
+        await broker.shutdown()
     log.info("shutdown")
 
 
@@ -41,8 +48,9 @@ def create_app() -> FastAPI:
 
     register_error_handlers(app)
     app.include_router(health_router)
+    app.include_router(repos_router)
 
-    # Routers added in later phases (repos, chat, source) register here.
+    # chat + source routers register here in Phase 2.
     return app
 
 

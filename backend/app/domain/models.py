@@ -100,3 +100,27 @@ class Answer(BaseModel):
 def point_id(repo_id: str, path: str, index: int) -> str:
     """uuid5(repo_id:path:index) — stable across runs → idempotent upserts."""
     return str(uuid5(NAMESPACE_URL, f"{repo_id}:{path}:{index}"))
+
+
+class SparseVector(BaseModel):
+    """A sparse lexical vector (term index → weight). Produced by the sparse embedder."""
+
+    indices: list[int]
+    values: list[float]
+
+
+class VectorPoint(BaseModel):
+    """One row to upsert into Qdrant: id + named dense/sparse vectors + payload."""
+
+    id: str
+    dense: list[float]
+    sparse: SparseVector
+    payload: dict
+
+
+class ScoredPoint(BaseModel):
+    """A search result from the vector store: point id, score, and stored payload."""
+
+    id: str
+    score: float
+    payload: dict
