@@ -14,7 +14,8 @@ from pydantic import BaseModel
 from app.domain.models import Citation
 from app.domain.retrieval.context import Source
 
-_MARKER = re.compile(r"\[(\d+)\]")
+# Matches a single OR grouped citation: [1], [1, 3], [1,2,5]. The LLM naturally groups them.
+_MARKER = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 _SENTENCE = re.compile(r"[^.!?]*[.!?]|[^.!?]+$")
 
 
@@ -25,7 +26,13 @@ class CitationCheck(BaseModel):
 
 
 def markers_in(text: str) -> list[int]:
-    return [int(m) for m in _MARKER.findall(text)]
+    out: list[int] = []
+    for group in _MARKER.findall(text):
+        for part in group.split(","):
+            part = part.strip()
+            if part.isdigit():
+                out.append(int(part))
+    return out
 
 
 def build_citations(text: str, sources: list[Source]) -> list[Citation]:

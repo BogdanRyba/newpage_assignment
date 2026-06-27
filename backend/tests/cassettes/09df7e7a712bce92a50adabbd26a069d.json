@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "The maximum number of search results returned is 20, which is defined by the `MAX_RESULTS` constant [2] used to slice the ranked search results [1, 7]."
+}

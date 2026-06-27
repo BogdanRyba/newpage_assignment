@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "```json\n{\"verdict\":\"pass\",\"unsupported\":[]}\n```"
+}

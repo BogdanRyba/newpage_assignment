@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "Notes are scored and ranked based on how many query terms they contain, excluding stopwords [1, 7]. \n\nThe scoring process works as follows:\n1. The search query is split into lowercase terms, and common words defined in `STOPWORDS` are removed [1, 4].\n2. Each note is scored against these terms using a helper function (`_score`) that counts overlapping terms [1, 7].\n3. Notes with a score of 0 or less are filtered out [1].\n4. The remaining notes are sorted in descending order by their score (best first) [1], and the top results up to `MAX_RESULTS` are returned [2, 6]."
+}

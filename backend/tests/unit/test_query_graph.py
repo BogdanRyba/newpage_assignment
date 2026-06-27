@@ -71,6 +71,24 @@ async def test_critic_rejects_hallucinated_marker_then_regenerates() -> None:
     assert len(deps.generator.calls) == 4  # 2x (generate + critic)
 
 
+async def test_valid_citations_survive_an_overeager_critic() -> None:
+    # The LLM judge flags the only sentence as unsupported every round, but its citation [1]
+    # is deterministically valid → trust the valid citation rather than false-refuse.
+    deps = make_deps(
+        points=[CALC],
+        responses=[
+            "add increments the running total [1].",
+            '{"verdict":"fail","unsupported":["add increments the running total"]}',
+            "add increments the running total [1].",
+            '{"verdict":"fail","unsupported":["add increments the running total"]}',
+        ],
+        max_critic_iterations=1,
+    )
+    answer = await _run(deps)
+    assert not answer.refused
+    assert [c.n for c in answer.citations] == [1]
+
+
 async def test_unsupported_after_retries_drops_to_refusal() -> None:
     # Every draft only cites a hallucinated marker → nothing valid survives → refuse.
     deps = make_deps(

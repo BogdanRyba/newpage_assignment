@@ -44,21 +44,31 @@ def critic_node(deps: Deps) -> Node:
 
         check = check_validity(state.draft, state.sources)
         verdict = await _faithfulness(deps, state)
-        accepted = check.is_valid and verdict["pass"]
 
-        if accepted:
+        if check.is_valid and verdict["pass"]:
             return {"answer": _answer(state.draft, state)}
+
+        # Remember the earliest validly-cited draft — the LLM judge is flaky, so a later
+        # regeneration may degrade; we never want to lose a good, citable answer.
+        best = state.best_draft or (state.draft if check.is_valid else "")
 
         if state.critic_iters < deps.settings.max_critic_iterations:
             return {
                 "feedback": _feedback(check, verdict),
                 "critic_iters": state.critic_iters + 1,
+                "best_draft": best,
             }
 
-        # Retries exhausted → keep only supported, cited sentences.
+        # Retries exhausted → keep only supported, cited sentences from the latest draft.
         pruned = drop_unsupported(state.draft, state.sources, verdict["unsupported"])
         if pruned:
             return {"answer": _answer(pruned, state)}
+        # Otherwise fall back to a validly-cited draft (latest or earlier) rather than
+        # false-refuse over an over-eager judge. Citation-validity is the deterministic, hard
+        # guard; an answer with no valid citations at all still refuses.
+        fallback = state.draft if check.is_valid else best
+        if fallback:
+            return {"answer": _answer(fallback, state)}
         return {
             "answer": Answer(
                 text=INSUFFICIENT_SUPPORT, refused=True, refusal_reason="insufficient_support"

@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from app.domain.citation.service import build_citations, check_validity, drop_unsupported
+from app.domain.citation.service import (
+    build_citations,
+    check_validity,
+    drop_unsupported,
+    markers_in,
+)
 from app.domain.retrieval.context import Source
 
 SOURCES = [
@@ -20,6 +25,17 @@ def test_build_citations_maps_markers_to_sources() -> None:
     assert [c.n for c in cites] == [1, 2]
     assert cites[0].location.label == "calc.py:10-12"
     assert cites[0].symbol == "add"
+
+
+def test_grouped_citation_markers_are_parsed() -> None:
+    # Regression: the LLM writes grouped citations like "[1, 3]" — these must be recognised,
+    # not treated as zero markers (which caused false "no citations" → needless refusal).
+    assert markers_in("ranks then returns [1, 2] done") == [1, 2]
+    assert markers_in("a [1] and b [2]") == [1, 2]
+    check = check_validity("NoteStore ranks and returns the top results [1, 2].", SOURCES)
+    assert check.has_any and check.is_valid and check.invalid_markers == []
+    cites = build_citations("ranks and returns [1, 2].", SOURCES)
+    assert [c.n for c in cites] == [1, 2]
 
 
 def test_valid_answer_passes_check() -> None:

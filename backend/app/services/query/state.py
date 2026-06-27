@@ -36,6 +36,7 @@ class QueryState(BaseModel):
     sources_block: str = ""
 
     draft: str = ""
+    best_draft: str = ""  # earliest validly-cited draft, kept as a fallback at exhaustion
     critic_iters: int = 0
     feedback: str = ""
 

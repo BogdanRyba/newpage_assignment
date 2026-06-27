@@ -603,10 +603,29 @@ function renderSegments(
 ) {
   const byN = new Map(citations.map((c) => [c.n, c]));
   const parts: React.ReactNode[] = [];
-  const re = /(\[\d+\]|`[^`]+`)/g;
+  // Match single OR grouped citations ([1], [1, 3]) and inline `code`.
+  const re = /(\[\d+(?:\s*,\s*\d+)*\]|`[^`]+`)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let key = 0;
+  const citeBtn = (c: Citation) => (
+    <button
+      key={key++}
+      onClick={() => onCite(c)}
+      style={{
+        border: "none",
+        background: "none",
+        cursor: "pointer",
+        fontFamily: mono,
+        fontSize: 11.5,
+        color: C.accent,
+        padding: "0 1px",
+        verticalAlign: "baseline",
+      }}
+    >
+      {c.path.split("/").pop()}:{c.start}
+    </button>
+  );
   while ((m = re.exec(text))) {
     if (m.index > last) parts.push(<span key={key++}>{text.slice(last, m.index)}</span>);
     const tok = m[0];
@@ -617,27 +636,13 @@ function renderSegments(
         </code>,
       );
     } else {
-      const n = parseInt(tok.slice(1, -1), 10);
-      const c = byN.get(n);
-      if (c)
-        parts.push(
-          <button
-            key={key++}
-            onClick={() => onCite(c)}
-            style={{
-              border: "none",
-              background: "none",
-              cursor: "pointer",
-              fontFamily: mono,
-              fontSize: 11.5,
-              color: C.accent,
-              padding: "0 1px",
-              verticalAlign: "baseline",
-            }}
-          >
-            {c.path.split("/").pop()}:{c.start}
-          </button>,
-        );
+      const nums = tok
+        .slice(1, -1)
+        .split(",")
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => !Number.isNaN(n));
+      const found = nums.map((n) => byN.get(n)).filter((c): c is Citation => Boolean(c));
+      if (found.length) found.forEach((c) => parts.push(citeBtn(c)));
       else parts.push(<span key={key++}>{tok}</span>);
     }
     last = re.lastIndex;
