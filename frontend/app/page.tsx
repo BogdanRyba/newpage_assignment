@@ -8,6 +8,7 @@ import {
   createRepo,
   getRepo,
   getSource,
+  getSuggestions,
   listRepos,
   streamChat,
   streamIngest,
@@ -17,12 +18,18 @@ import { C, mono, sans } from "./theme";
 
 type Phase = "ingest" | "indexing" | "workspace";
 
+interface Step {
+  label: string;
+  detail?: string;
+}
+
 interface Msg {
   role: "user" | "assistant";
   text: string;
   citations: Citation[];
   streaming: boolean;
   noSources: boolean;
+  steps: Step[];
 }
 
 const PHASE_ORDER = ["cloning", "parsing", "embedding", "building_index"];
@@ -33,10 +40,10 @@ const PHASE_LABELS = [
   "Building hybrid index",
 ];
 
-const SUGGESTIONS = [
-  "How does NoteStore search for notes?",
-  "What is the maximum number of search results?",
-  "How are notes scored against a query?",
+// Shown only until the LLM-generated, repo-specific suggestions arrive (or if they fail).
+const FALLBACK_SUGGESTIONS = [
+  "What does this repository do, and how is it organized?",
+  "What are the main modules and how do they fit together?",
 ];
 
 export default function Page() {
@@ -50,7 +57,17 @@ export default function Page() {
   const [openFile, setOpenFile] = useState<SourceOut | null>(null);
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [error, setError] = useState("");
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const codeRef = useRef<HTMLDivElement>(null);
+
+  // Fetch repo-specific, LLM-generated starter questions whenever we open a workspace.
+  useEffect(() => {
+    if (phase !== "workspace" || !repoId) return;
+    setSuggestions([]);
+    getSuggestions(repoId)
+      .then(setSuggestions)
+      .catch(() => setSuggestions([]));
+  }, [phase, repoId]);
 
   const startIndex = useCallback(async () => {
     if (!repoUrl.trim()) return;
@@ -139,8 +156,8 @@ export default function Page() {
       setInput("");
       setMessages((m) => [
         ...m,
-        { role: "user", text, citations: [], streaming: false, noSources: false },
-        { role: "assistant", text: "", citations: [], streaming: true, noSources: false },
+        { role: "user", text, citations: [], streaming: false, noSources: false, steps: [] },
+        { role: "assistant", text: "", citations: [], streaming: true, noSources: false, steps: [] },
       ]);
       const update = (fn: (m: Msg) => Msg) =>
         setMessages((msgs) => {
@@ -155,6 +172,8 @@ export default function Page() {
           text,
           (e) => {
             if (e.type === "session") setSessionId(e.session_id);
+            else if (e.type === "status")
+              update((m) => ({ ...m, steps: [...m.steps, { label: e.label, detail: e.detail }] }));
             else if (e.type === "token") update((m) => ({ ...m, text: m.text + e.text }));
             else if (e.type === "citations") {
               firstCite = e.citations[0];
@@ -466,7 +485,7 @@ function Workspace(props: {
           >
             <div style={{ maxWidth: 680, margin: "0 auto" }}>
               <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-                {SUGGESTIONS.map((s) => (
+                {(suggestions.length ? suggestions : FALLBACK_SUGGESTIONS).map((s) => (
                   <button key={s} onClick={() => send(s)} style={chip}>
                     {s}
                   </button>
@@ -543,9 +562,25 @@ function MessageView({
   return (
     <div style={{ marginBottom: 38 }}>
       <Label>Daedalus</Label>
+      {m.steps.length > 0 && (
+        <div style={{ margin: "2px 0 14px", fontFamily: mono, fontSize: 12.5, lineHeight: 1.85 }}>
+          {m.steps.map((s, i) => {
+            const active = m.streaming && !m.text && i === m.steps.length - 1;
+            return (
+              <div key={i} style={{ display: "flex", gap: 8, color: active ? C.accent : C.faint }}>
+                <span>{active ? "▸" : "·"}</span>
+                <span>
+                  {s.label}
+                  {s.detail && <span style={{ color: C.faint2 }}> · {s.detail}</span>}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
       <div style={{ fontSize: 15, lineHeight: 1.68, color: "#38332D" }}>
         {renderSegments(m.text, m.citations, onCite)}
-        {m.streaming && (
+        {m.streaming && (m.text.length > 0 || m.steps.length === 0) && (
           <span
             style={{
               display: "inline-block",

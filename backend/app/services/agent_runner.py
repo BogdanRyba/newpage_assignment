@@ -58,7 +58,28 @@ class AgentRunner:
     async def stream(
         self, repo_id: str, question: str, repo_name: str | None = None
     ) -> AsyncIterator[dict]:
-        answer = await self.run(repo_id, question, repo_name)
+        """Stream the agent's progress, then its validated answer.
+
+        Each graph node is surfaced as a `status` event (the "thinking" trace) so the UI shows
+        what Daedalus is doing during the multi-second run — including the critic re-grounding a
+        claim — instead of a frozen cursor. We still only stream the *validated* answer text after
+        the critic loop settles, never an unvalidated draft (see DECISIONS).
+        """
+        state = QueryState(repo_id=repo_id, question=question, repo_name=repo_name)
+        answer: Answer | None = None
+        async with asyncio.timeout(self.deps.settings.request_timeout_s):
+            async for chunk in self.graph.astream(
+                state, stream_mode="updates", config={"recursion_limit": RECURSION_LIMIT}
+            ):
+                for node, raw in chunk.items():
+                    update = raw if isinstance(raw, dict) else {}
+                    if update.get("answer") is not None:
+                        answer = update["answer"]
+                    event = _status_event(node, update)
+                    if event:
+                        yield event
+
+        answer = answer or Answer(text="No answer produced.", refused=True, refusal_reason="empty")
         words = answer.text.split(" ")
         for i in range(0, len(words), 3):
             yield {"type": "token", "text": " ".join(words[i : i + 3]) + " "}
@@ -80,3 +101,41 @@ class AgentRunner:
         elif answer.refused:
             yield {"type": "no_sources", "reason": answer.refusal_reason}
         yield {"type": "done"}
+
+
+def _status_event(node: str, update: dict) -> dict | None:
+    """Map a graph node's partial update to a human-readable 'thinking' status event (or None).
+
+    Counts/feedback come from the node's own state, so the trace reflects what actually happened
+    (candidates found, sources read, a critic regeneration) — not a canned spinner.
+    """
+    if node == "embed":
+        return {"type": "status", "label": "Understanding the question"}
+    if node == "retrieve":
+        n = len(update.get("fused") or [])
+        return {"type": "status", "label": "Searching the hybrid index", "detail": f"{n} chunks"}
+    if node == "graph_augment":
+        # Only when the graph store actually pulled in related symbols (enabled + matches).
+        if update.get("ranked"):
+            return {"type": "status", "label": "Expanding via the code graph"}
+        return None
+    if node == "assemble":
+        n = len(update.get("sources") or [])
+        return {
+            "type": "status",
+            "label": "Reading sources",
+            "detail": f"{n} source{'' if n == 1 else 's'}",
+        }
+    if node == "generate":
+        return {"type": "status", "label": "Drafting the answer"}
+    if node == "critic":
+        if update.get("answer") is not None:
+            return {"type": "status", "label": "Validating citations"}
+        return {
+            "type": "status",
+            "label": "Refining — a claim wasn't grounded",
+            "detail": f"attempt {update.get('critic_iters', 1)}",
+        }
+    if node == "scope_refuse":
+        return {"type": "status", "label": "No matching sources in this repo"}
+    return None

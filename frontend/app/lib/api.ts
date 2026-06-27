@@ -108,10 +108,19 @@ export function streamIngest(
 
 export type ChatEvent =
   | { type: "session"; session_id: string }
+  | { type: "status"; label: string; detail?: string }
   | { type: "token"; text: string }
   | { type: "citations"; citations: Citation[] }
   | { type: "no_sources"; reason?: string }
   | { type: "done" };
+
+// LLM-generated starter questions grounded in the repo's files/symbols.
+export async function getSuggestions(id: string): Promise<string[]> {
+  const { suggestions } = await jsonOrThrow<{ suggestions: string[] }>(
+    await fetch(`${API_BASE}/repos/${id}/suggestions`),
+  );
+  return suggestions;
+}
 
 // POST chat with an SSE response body, parsed from the fetch stream.
 export async function streamChat(

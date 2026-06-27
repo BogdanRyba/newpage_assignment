@@ -64,9 +64,14 @@ async def test_chat_streams_tokens_then_citations_then_done() -> None:
                         events.append(line.split(":", 1)[1].strip())
                     elif line.startswith("data:"):
                         payloads.append(json.loads(line.split(":", 1)[1].strip()))
+        assert "status" in events  # the "thinking" trace streams before the answer
         assert "token" in events
         assert "citations" in events
         assert events[-1] == "done"
+        # Progress must arrive before the first answer token (otherwise the UI looks frozen).
+        assert events.index("status") < events.index("token")
+        labels = [p["label"] for p in payloads if p.get("type") == "status"]
+        assert any("Searching" in lbl for lbl in labels)  # real node progress, not a spinner
         cite = next(p for p in payloads if p.get("type") == "citations")
         assert cite["citations"][0]["path"] == "calculator.py"
     finally:

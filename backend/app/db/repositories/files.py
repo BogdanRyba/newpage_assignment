@@ -40,6 +40,24 @@ class FileRepository:
             select(File).where(File.repo_id == repo_id, File.path == path)
         )
 
+    async def symbol_map(
+        self, repo_id: str, file_cap: int = 40, sym_cap: int = 12
+    ) -> list[tuple[str, list[str]]]:
+        """A compact map of `path → [symbols]` for the repo — the basis for LLM-generated
+        starter questions. Caps keep the prompt small on large repos."""
+        rows = await self.session.execute(
+            select(File.path, Chunk.symbol)
+            .join(Chunk, Chunk.file_id == File.id)
+            .where(File.repo_id == repo_id, Chunk.symbol.isnot(None))
+            .order_by(File.path)
+        )
+        grouped: dict[str, list[str]] = {}
+        for path, symbol in rows.all():
+            syms = grouped.setdefault(path, [])
+            if symbol not in syms and len(syms) < sym_cap:
+                syms.append(symbol)
+        return list(grouped.items())[:file_cap]
+
 
 class ChunkRepository:
     def __init__(self, session: AsyncSession) -> None:

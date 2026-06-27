@@ -5,6 +5,20 @@ This feeds README section (e) — but the README is written in my own words, not
 
 ---
 
+### D-018 · Stream node progress as a "thinking" trace; LLM-generated suggestions
+Two UX changes that both lean on the existing LangGraph/LangChain seams. (1) `AgentRunner.stream`
+now drives the graph with `astream(stream_mode="updates")` and emits a `status` event per node
+(embed → retrieve N chunks → read N sources → draft → validate, incl. "refining — a claim wasn't
+grounded"). **Why:** the runner validates the *whole* answer before streaming (no unvalidated draft,
+D-…), so the first token can be seconds away; with no feedback the UI looked frozen. The trace shows
+genuine progress (real counts/critic retries), not a spinner — and never leaks the unvalidated draft.
+(2) `GET /repos/{id}/suggestions` generates 4 starter questions from the repo's own file/symbol map
+via a versioned prompt (`prompts/suggestions.py`), replacing hardcoded chips that were wrong for any
+non-sample repo. Cached per repo; degrades to a generic fallback if the generator is unavailable.
+**Trade-off:** suggestions cost one LLM call per repo (cached, fetched async — never blocks the
+workspace); the thinking trace adds `status` events to the chat SSE (additive — existing consumers
+ignore them).
+
 ### D-017 · Local embedder weights the contextual header (path · symbol)
 `LocalHashEmbedder` / `LocalHashSparse` (the offline CI embedder, D-011) now weights tokens from a
 chunk's leading `# path · symbol` header (added by `with_context`) above body tokens. **Why:** a plain

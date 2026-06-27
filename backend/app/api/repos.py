@@ -20,11 +20,13 @@ from app.core.errors import IngestError, RepoNotFound
 from app.core.progress import channel
 from app.core.uploads import store_upload
 from app.db.models import IngestJob, Repo
+from app.db.repositories.files import FileRepository
 from app.db.repositories.ingest_jobs import IngestJobRepository
 from app.db.repositories.repos import RepoRepository
 from app.db.session import get_session
 from app.ingestion.clone import repo_name_from_url
 from app.ingestion.tasks import ingest_repo
+from app.services.suggestions import generate_suggestions
 
 router = APIRouter(prefix="/repos", tags=["repos"])
 
@@ -63,6 +65,10 @@ class IngestStarted(BaseModel):
 class RepoDetail(BaseModel):
     repo: RepoOut
     job: JobOut | None
+
+
+class SuggestionsOut(BaseModel):
+    suggestions: list[str]
 
 
 def _repo_out(r: Repo) -> RepoOut:
@@ -130,6 +136,18 @@ async def get_repo(repo_id: str, session: AsyncSession = Depends(get_session)) -
         raise RepoNotFound(f"repo {repo_id} not found")
     job = await IngestJobRepository(session).latest_for_repo(repo_id)
     return RepoDetail(repo=_repo_out(repo), job=_job_out(job) if job else None)
+
+
+@router.get("/{repo_id}/suggestions", response_model=SuggestionsOut)
+async def repo_suggestions(
+    repo_id: str, session: AsyncSession = Depends(get_session)
+) -> SuggestionsOut:
+    """LLM-generated starter questions grounded in this repo's files/symbols (cached per repo)."""
+    repo = await RepoRepository(session).get(repo_id)
+    if not repo:
+        raise RepoNotFound(f"repo {repo_id} not found")
+    symbol_map = await FileRepository(session).symbol_map(repo_id)
+    return SuggestionsOut(suggestions=await generate_suggestions(repo_id, symbol_map))
 
 
 @router.get("/{repo_id}/ingest/stream")

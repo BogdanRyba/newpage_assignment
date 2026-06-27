@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "[\n  \"How does `searchNotes` in `web/api.ts` interact with `NoteStore`?\",\n  \"How does `OverlapRanker` differ from `TitleBoostRanker` in `notes/ranking.py`?\",\n  \"Where are `MAX_RESULTS` and `STOPWORDS` used in `notes/store.py`?\",\n  \"How does `search` in `notes/store.py` use `rank_notes`?\"\n]"
+}
