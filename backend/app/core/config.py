@@ -49,14 +49,11 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     otel_enabled: bool = True
 
-    # --- graph store (stretch) ---
+    # --- graph store (opt-in: docker compose --profile graph up + GRAPH_ENABLED=true) ---
+    graph_enabled: bool = False
     neo4j_uri: str = "bolt://neo4j:7687"
     neo4j_auth: str = "neo4j/ariadnegraph"
-
-    @property
-    def graph_enabled(self) -> bool:
-        """Neo4j is opt-in (compose --profile graph). Off in MVP."""
-        return False
+    graph_augment_top: int = 3  # how many top hits to expand via the graph
 
 
 @lru_cache

@@ -11,7 +11,7 @@ from functools import lru_cache
 from app.adapters.embedding.gemini import GeminiEmbedder
 from app.adapters.embedding.sparse_fastembed import FastEmbedSparse
 from app.adapters.embedding.voyage import VoyageEmbedder
-from app.adapters.graph.neo4j import Neo4jGraphStoreStub
+from app.adapters.graph.neo4j import Neo4jGraphStore, Neo4jGraphStoreStub
 from app.adapters.llm.gemini import GeminiGenerator
 from app.adapters.parsing.tree_sitter import TreeSitterParser
 from app.adapters.vector.qdrant import QdrantVectorStore
@@ -58,6 +58,8 @@ def make_vector_store() -> VectorStore:
 
 @lru_cache
 def make_graph_store() -> GraphStore:
+    if get_settings().graph_enabled:
+        return Neo4jGraphStore()
     return Neo4jGraphStoreStub()
 
 

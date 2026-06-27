@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.factory import (
     make_embedder,
+    make_graph_store,
     make_parser,
     make_sparse_embedder,
     make_vector_store,
@@ -44,6 +45,7 @@ class IngestService:
         self.embedder = make_embedder()
         self.sparse = make_sparse_embedder()
         self.vectors = make_vector_store()
+        self.graph = make_graph_store()
 
     async def run(
         self,
@@ -93,6 +95,16 @@ class IngestService:
             # --- embed + index ---
             await self._progress(repo_id, job_id, phase="embedding", pct=45)
             chunk_count = await self._embed_and_index(ctx, pending, repo_id, job_id)
+
+            # --- graph (optional, opt-in) ---
+            if self.graph.enabled:
+                from app.domain.graph.extract import build_graph
+
+                nodes, edges = build_graph([c for c, _ in pending])
+                await self.graph.ensure_schema()
+                await self.graph.clear_repo(ctx)
+                await self.graph.upsert_graph(ctx, nodes, edges)
+                log.info("graph_written", repo_id=repo_id, nodes=len(nodes), edges=len(edges))
 
             # --- finalize ---
             await self._progress(repo_id, job_id, phase="building_index", pct=98)

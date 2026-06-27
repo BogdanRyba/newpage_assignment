@@ -9,8 +9,12 @@
 - `docker compose up` brings everything up; seeder ingests a sample repo for instant demo.
 - Alembic migrations; eval harness with a golden set + metrics; deterministic cassette tests.
 
+## Built beyond MVP
+- **Neo4j graph RAG (opt-in):** call/contains graph + `graph_augment` node + keyword dispatcher
+  for structural questions. Enable with `GRAPH_ENABLED=true` + `docker compose --profile graph up`.
+
 ## Stretch (documented as "next", not built unless time allows)
-- Neo4j call/import graph + graph-augment node + dispatcher/parallel-decomposition (graph RAG).
+- Parallel query decomposition (LangGraph `Send`) + a proper symbol resolver (replace name-based graph).
 - Incremental re-indexing by git diff (hashes already stored per file).
 - Multi-repo workspace switching beyond one-at-a-time.
 - LangSmith-first tracing UI.

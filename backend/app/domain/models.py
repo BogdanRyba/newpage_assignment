@@ -124,3 +124,25 @@ class ScoredPoint(BaseModel):
     id: str
     score: float
     payload: dict
+
+
+class GraphNode(BaseModel):
+    """A code symbol in the graph store. Self-contained (carries its text) so graph
+    augmentation needs no extra DB lookup."""
+
+    symbol: str
+    path: str
+    lang: str
+    kind: str
+    start_line: int
+    end_line: int
+    text: str
+    point_id: str
+
+
+class GraphEdge(BaseModel):
+    """A directed relationship between two symbols (by name) within a repo."""
+
+    src: str  # source symbol name
+    dst: str  # destination symbol name
+    type: str  # CALLS | CONTAINS

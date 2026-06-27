@@ -5,6 +5,7 @@ Each is a builder that closes over Deps and returns a `State -> partial State` n
 
 from __future__ import annotations
 
+import re
 from collections.abc import Awaitable, Callable
 
 from app.core.instrument import instrument
@@ -13,6 +14,13 @@ from app.domain.retrieval.fusion import reciprocal_rank_fusion
 from app.services.query.state import Deps, QueryState
 
 Node = Callable[[QueryState], Awaitable[dict]]
+
+# Cheap dispatcher: structural questions ("who calls X", "blast radius") want deeper graph
+# expansion; semantic questions stay at depth 1.
+_STRUCTURAL = re.compile(
+    r"\b(who calls|caller|callee|call graph|depend|import|used by|blast radius|reference)\b",
+    re.IGNORECASE,
+)
 
 
 def _to_hit(repo_id: str, sp: ScoredPoint, source: str) -> Hit:
@@ -75,12 +83,40 @@ def rerank_node(deps: Deps) -> Node:
 
 
 def graph_augment_node(deps: Deps) -> Node:
-    """Passthrough seam for Neo4j graph augmentation (stretch). No-op while disabled."""
+    """Augment retrieval with structurally-related symbols from the graph store.
+
+    For the top hits, pull callers/callees/containers from Neo4j and add their chunks to the
+    context. No-op (passthrough) when the graph store is disabled — the MVP path is unchanged.
+    """
 
     @instrument("graph_augment")
     async def _node(state: QueryState) -> dict:
-        if not deps.graph_store.enabled:
+        if not deps.graph_store.enabled or not state.ranked:
             return {}
-        return {}  # real augmentation lands when the graph store is implemented
+        ctx = RepoContext(repo_id=state.repo_id)
+        depth = 2 if _STRUCTURAL.search(state.question) else 1
+        seen = {h.chunk.point_id for h in state.ranked}
+        additions: list[Hit] = []
+        for hit in state.ranked[: deps.settings.graph_augment_top]:
+            if not hit.chunk.symbol:
+                continue
+            for node in await deps.graph_store.neighbors(ctx, hit.chunk.symbol, depth=depth):
+                if not node.text or node.point_id in seen:
+                    continue
+                seen.add(node.point_id)
+                chunk = Chunk(
+                    repo_id=state.repo_id,
+                    path=node.path,
+                    lang=node.lang,
+                    symbol=node.symbol,
+                    kind=node.kind,
+                    start_line=node.start_line,
+                    end_line=node.end_line,
+                    text=node.text,
+                )
+                additions.append(Hit(chunk=chunk, score=0.0, source="graph"))
+        if not additions:
+            return {}
+        return {"ranked": state.ranked + additions}
 
     return _node

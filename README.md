@@ -121,11 +121,14 @@ Two harnesses (see [`docs/HARNESS.md`](docs/HARNESS.md)):
 
 ## (h) What I'd do differently / next
 
-Neo4j graph RAG (the port + passthrough node already exist) with a dispatcher routing structural vs
-semantic questions and parallel query decomposition; incremental re-indexing by git diff (file hashes are
-already stored); the citation **hover-preview popover** (deferred — click-to-open is implemented); evals
-against real Gemini embeddings (not just the local provider); and a larger golden set with regression
-tracking across prompt `VERSION`s.
+**Graph RAG is now implemented** (opt-in): a Neo4j call/contains graph + a `graph_augment` node that
+enriches the top hits with structurally-related symbols, plus a keyword dispatcher that deepens
+traversal for "who calls X"-style questions (`GRAPH_ENABLED=true` + `docker compose --profile graph up`).
+Its resolution is name-based — the honest next step is a real symbol resolver (LSP/SCIP) to kill
+same-name conflation, plus parallel query decomposition (LangGraph `Send`). Beyond that: incremental
+re-indexing by git diff (file hashes already stored), the citation **hover-preview popover** (deferred —
+click-to-open is implemented), evals against real Gemini embeddings, and a larger golden set with
+regression tracking across prompt `VERSION`s.
 
 ## (i) Reflections
 

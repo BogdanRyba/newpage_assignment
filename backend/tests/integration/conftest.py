@@ -17,10 +17,13 @@ from app.db.session import engine
 @pytest.fixture(autouse=True)
 async def _cleanup():
     yield
-    try:
-        await factory.make_vector_store().aclose()  # type: ignore[attr-defined]
-    except Exception:  # noqa: BLE001
-        pass
+    for make in (factory.make_vector_store, factory.make_graph_store):
+        try:
+            inst = make()
+            if hasattr(inst, "aclose"):
+                await inst.aclose()
+        except Exception:  # noqa: BLE001
+            pass
     for fn in (
         factory.make_vector_store,
         factory.make_embedder,

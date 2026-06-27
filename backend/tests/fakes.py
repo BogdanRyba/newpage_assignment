@@ -30,10 +30,22 @@ class FakeSparse:
 
 
 class FakeGraphStore:
-    enabled = False
+    def __init__(self, enabled: bool = False, neighbors: list | None = None) -> None:
+        self._enabled = enabled
+        self._neighbors = neighbors or []
+        self.calls: list[tuple[str, int]] = []
 
-    async def neighbors(self, ctx, symbol: str, depth: int = 1) -> list[str]:
-        return []
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
+    async def ensure_schema(self) -> None: ...
+    async def clear_repo(self, ctx) -> None: ...
+    async def upsert_graph(self, ctx, nodes, edges) -> None: ...
+
+    async def neighbors(self, ctx, symbol: str, depth: int = 1) -> list:
+        self.calls.append((symbol, depth))
+        return list(self._neighbors)
 
 
 class FakeVectorStore:
@@ -85,13 +97,18 @@ def make_point(
     )
 
 
-def make_deps(points: list[ScoredPoint], responses: list[str], **settings_overrides) -> Deps:
+def make_deps(
+    points: list[ScoredPoint],
+    responses: list[str],
+    graph_store: FakeGraphStore | None = None,
+    **settings_overrides,
+) -> Deps:
     settings = Settings(rerank_enabled=False, **settings_overrides)
     return Deps(
         embedder=FakeEmbedder(),
         sparse=FakeSparse(),
         vectors=FakeVectorStore(points),
         generator=FakeGenerator(responses),
-        graph_store=FakeGraphStore(),
+        graph_store=graph_store or FakeGraphStore(),
         settings=settings,
     )

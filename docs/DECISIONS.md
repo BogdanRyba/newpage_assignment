@@ -12,6 +12,17 @@ credentials, and gives integration tests a deterministic retrieval substrate (co
 with cassettes for the LLM). **Trade-off:** lexical-overlap quality only — never a default
 for real use; Gemini stays the default provider.
 
+### D-014 · Graph RAG (Neo4j) — opt-in, name-based call/contains graph
+Implemented the graph seam: a `:Symbol` graph (CALLS + CONTAINS edges, every node tagged
+`repo_id`) built during ingest, and a `graph_augment` node that pulls callers/callees/containers
+of the top hits into context. A keyword dispatcher deepens traversal for structural questions
+("who calls X"). Opt-in via `GRAPH_ENABLED=true` + `docker compose --profile graph up`; the MVP
+path is untouched when off. **Why:** structural relationships answer questions pure vector search
+can't ("blast radius", "what calls this"). **Trade-off:** resolution is **name-based** (no type/scope
+analysis) — two same-named symbols in different files conflate, and dynamic dispatch is missed. Honest
+heuristic; a real resolver (or LSP/SCIP index) is the productionization path. Isolation is by `repo_id`
+on every node + traversal, never by graph instance.
+
 ### D-013 · Eval determinism: local embedder + recorded LLM cassettes
 The eval-runner computes retrieval metrics (recall@k, MRR) with the deterministic local
 embedder (offline, no key) so the CI gate always bites; answer metrics (citation-validity,
