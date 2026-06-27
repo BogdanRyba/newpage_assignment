@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "Based on the provided sources, the `notes` package defines an abstract base class/strategy interface and two concrete ranking strategies [1, 3, 6]:\n\n*   **`Ranker`**: The abstract base class (or strategy interface) that defines the `score` method and a shared `rank` method [3, 6].\n*   **`OverlapRanker`**: A concrete subclass of `Ranker` that scores notes by counting how many query terms appear anywhere in the note, including the title, body, and tags [4]. It is used as the default ranking strategy [5, 7].\n*   **`TitleBoostRanker`**: Another concrete subclass of `Ranker` [1]. (Its specific implementation details are not provided in the sources).\n\nThese strategies allow swapping the relevance policy of the note store without modifying the store itself [3, 7]."
+}

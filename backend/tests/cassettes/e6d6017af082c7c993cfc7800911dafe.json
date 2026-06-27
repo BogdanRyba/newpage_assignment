@@ -1,5 +1,0 @@
-{
-  "kind": "complete",
-  "model": "gemini-3.5-flash",
-  "result": "The `_score` function ranks a note against a set of query terms using the following steps:\n\n1. It splits the note's text into words, converts them to lowercase, and removes any words that are in the `STOPWORDS` set [3].\n2. It finds the intersection between this set of note words and the query `terms` set [3].\n3. It returns the size (length) of this intersection as the score, representing the number of unique, non-stopword query terms that appear in the note [3]."
-}

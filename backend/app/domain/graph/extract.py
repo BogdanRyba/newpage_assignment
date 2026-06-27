@@ -1,9 +1,13 @@
-"""Build a lightweight call/contains graph from chunked symbols.
+"""Build a lightweight call/contains/inheritance graph from chunked symbols.
 
 Approximate, name-based resolution (no type/scope analysis): a CALLS edge is added when a
 symbol's body mentions another known symbol's name; CONTAINS when a class's line range encloses
-a method. This is intentionally simple — good enough to surface "related code" for augmentation,
-and honestly documented as a heuristic (two same-named symbols in different files will conflate).
+a method; EXTENDS/IMPLEMENTS from a class/interface's parsed supertypes. This is intentionally
+simple — good enough to surface "related code" and enumerate subtypes — and honestly documented
+as a heuristic: an *external* base (e.g. `ABC`, a library type) resolves to no symbol and yields
+no edge, and two same-named symbols *in the same language* in different files still conflate.
+Every edge carries `src_lang` so cross-language name collisions (a Python and a TS `Ranker`)
+never link — that scoping is enforced at the graph-store upsert.
 """
 
 from __future__ import annotations
@@ -35,13 +39,15 @@ def build_graph(chunks: list[Chunk]) -> tuple[list[GraphNode], list[GraphEdge]]:
 
     names = {c.symbol for c in sym_chunks if c.symbol}
     edges: list[GraphEdge] = []
-    seen: set[tuple[str, str, str]] = set()
+    seen: set[tuple[str, str, str, str]] = set()
 
-    def add(src: str, dst: str, etype: str) -> None:
-        key = (src, dst, etype)
+    def add(src: str, dst: str, etype: str, src_lang: str) -> None:
+        # Dedup includes src_lang: a Python and a TS `OverlapRanker -> Ranker` are distinct edges
+        # (each links within its own language), not one collapsed edge.
+        key = (src, dst, etype, src_lang)
         if src != dst and key not in seen:
             seen.add(key)
-            edges.append(GraphEdge(src=src, dst=dst, type=etype))
+            edges.append(GraphEdge(src=src, dst=dst, type=etype, src_lang=src_lang))
 
     # CALLS: a symbol references another known symbol's name in its body.
     for c in sym_chunks:
@@ -49,7 +55,7 @@ def build_graph(chunks: list[Chunk]) -> tuple[list[GraphNode], list[GraphEdge]]:
             continue
         referenced = set(_IDENT.findall(c.text)) & names
         for dst in referenced:
-            add(c.symbol, dst, "CALLS")
+            add(c.symbol, dst, "CALLS", c.lang)
 
     # CONTAINS: a class's line range encloses another symbol in the same file.
     by_path: dict[str, list[Chunk]] = defaultdict(list)
@@ -62,6 +68,18 @@ def build_graph(chunks: list[Chunk]) -> tuple[list[GraphNode], list[GraphEdge]]:
                 if m is cls or not cls.symbol or not m.symbol:
                     continue
                 if cls.start_line <= m.start_line and m.end_line <= cls.end_line:
-                    add(cls.symbol, m.symbol, "CONTAINS")
+                    add(cls.symbol, m.symbol, "CONTAINS", cls.lang)
+
+    # EXTENDS / IMPLEMENTS: a class/interface's parsed supertypes that resolve to a known symbol.
+    # External bases (ABC, library types) aren't repo symbols → no dangling edge.
+    for c in sym_chunks:
+        if not c.symbol or c.kind not in _CLASS_KINDS:
+            continue
+        for base in c.bases:
+            if base in names:
+                add(c.symbol, base, "EXTENDS", c.lang)
+        for iface in c.implements:
+            if iface in names:
+                add(c.symbol, iface, "IMPLEMENTS", c.lang)
 
     return nodes, edges

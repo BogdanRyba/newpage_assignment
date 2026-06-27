@@ -47,6 +47,9 @@ class FakeGraphStore:
         self.calls.append((symbol, depth))
         return list(self._neighbors)
 
+    async def subtypes_of(self, ctx, symbol: str, depth: int = 2) -> list:
+        return list(self._neighbors)
+
 
 class FakeVectorStore:
     def __init__(self, points: list[ScoredPoint]) -> None:

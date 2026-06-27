@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "```json\n{\"faithfulness\": 1.0, \"reason\": \"The answer is fully supported by the provided sources, correctly identifying the 'score' method and citing the relevant Python and TypeScript definitions.\"}\n```"
+}

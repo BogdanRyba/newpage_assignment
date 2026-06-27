@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "A custom `Ranker` subclass must implement the `score` method [2]. \n\nIn Python, `score` is defined as an abstract method on the `Ranker` base class that calculates the relevance of a single note to the query terms [2]. Similarly, in TypeScript, any class implementing the `Ranker` interface must implement the `score` method [3]."
+}

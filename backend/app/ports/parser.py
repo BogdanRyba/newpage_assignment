@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 
 class SymbolSpan(BaseModel):
-    """One AST symbol: its kind, name, and byte/line extent in the source."""
+    """One AST symbol: its kind, name, byte/line extent, and any supertypes."""
 
     kind: str
     symbol: str | None
@@ -16,6 +16,8 @@ class SymbolSpan(BaseModel):
     end_byte: int
     start_line: int  # 1-based, inclusive
     end_line: int
+    bases: list[str] = []  # superclasses / super-interfaces (Python bases, TS `extends`)
+    implements: list[str] = []  # interfaces a TS class declares with `implements`
 
 
 @runtime_checkable

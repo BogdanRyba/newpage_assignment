@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "Notes are scored and ranked against a search query using a `Ranker` strategy [1, 7]:\n\n1. **Term Extraction**: The query is broken down into a set of terms [1, 2]. Common words defined in `STOPWORDS` are ignored during scoring [4].\n2. **Scoring**: A concrete subclass of `Ranker` (such as `OverlapRanker` or `TitleBoostRanker`) implements a `score` method to calculate an integer relevance score for each note against the query terms, where a higher score indicates greater relevance [1, 3].\n3. **Ranking and Filtering**: The `rank` method scores all notes, filters out any notes with a score of `0` or less (no overlap), and sorts the remaining notes in descending order (highest score first) [1, 2]."
+}

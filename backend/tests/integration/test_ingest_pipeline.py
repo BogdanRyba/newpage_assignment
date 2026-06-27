@@ -64,6 +64,15 @@ async def test_ingest_then_retrieve_finds_expected_symbol() -> None:
         cfg_hits = await vectors.search_dense(ctx, cv, limit=5)
         assert any("notes/config.py" in (h.payload.get("path") or "") for h in cfg_hits)
 
+        # Polymorphism: a strategy question surfaces the ranking module + a concrete subclass.
+        sv = await embedder.embed_query(
+            "ranking strategy subclasses OverlapRanker TitleBoostRanker"
+        )
+        strat_hits = await vectors.search_dense(ctx, sv, limit=5)
+        assert any("notes/ranking.py" in (h.payload.get("path") or "") for h in strat_hits)
+        sblob = " ".join((h.payload.get("symbol") or "") for h in strat_hits)
+        assert "OverlapRanker" in sblob or "TitleBoostRanker" in sblob or "Ranker" in sblob
+
         # Idempotency: a second ingest must not duplicate points.
         async with SessionLocal() as session:
             jobs2 = IngestJobRepository(session)

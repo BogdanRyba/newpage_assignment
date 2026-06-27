@@ -32,3 +32,7 @@ class GraphStore(Protocol):
     async def neighbors(self, ctx: RepoContext, symbol: str, depth: int = 1) -> list[GraphNode]:
         """Symbols structurally related to `symbol` (callers/callees/containers), repo-scoped."""
         ...
+
+    async def subtypes_of(self, ctx: RepoContext, symbol: str, depth: int = 2) -> list[GraphNode]:
+        """Concrete subtypes of `symbol` (directed EXTENDS/IMPLEMENTS traversal), repo-scoped."""
+        ...

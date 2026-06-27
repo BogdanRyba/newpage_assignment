@@ -54,6 +54,8 @@ def _chunk_symbols(
                     end_line=span.end_line,
                     text=with_context(path, span.symbol, code),
                     index=idx,
+                    bases=span.bases,
+                    implements=span.implements,
                 )
             )
             idx += 1
@@ -71,6 +73,8 @@ def _chunk_symbols(
                     end_line=span.start_line + block.end_line - 1,
                     text=with_context(path, span.symbol, block.text),
                     index=idx,
+                    bases=span.bases,
+                    implements=span.implements,
                 )
             )
             idx += 1

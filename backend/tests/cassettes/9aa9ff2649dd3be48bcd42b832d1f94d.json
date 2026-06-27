@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "In the TypeScript web layer (`web/api.ts`), the two classes that implement the `Ranker` interface are `OverlapRanker` and `TitleBoostRanker` [1]."
+}

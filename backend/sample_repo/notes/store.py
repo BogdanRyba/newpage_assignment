@@ -1,17 +1,22 @@
-"""In-memory store for notes, with a search backed by the ranker."""
+"""In-memory store for notes, with a search backed by a ranking strategy."""
 
 from __future__ import annotations
 
 from .config import MAX_RESULTS
 from .models import Note
-from .ranking import rank_notes
+from .ranking import OverlapRanker, Ranker
 
 
 class NoteStore:
-    """Holds notes in memory and answers add / get / all / search."""
+    """Holds notes in memory and answers add / get / all / search.
 
-    def __init__(self) -> None:
+    `search` delegates to an injected `Ranker` strategy (overlap ranking by default), so the
+    store depends on the ranking *abstraction*, not a specific scoring rule.
+    """
+
+    def __init__(self, ranker: Ranker | None = None) -> None:
         self._notes: dict[int, Note] = {}
+        self._ranker: Ranker = ranker or OverlapRanker()
 
     def add(self, note: Note) -> None:
         self._notes[note.id] = note
@@ -23,5 +28,5 @@ class NoteStore:
         return list(self._notes.values())
 
     def search(self, query: str) -> list[Note]:
-        """Rank all notes against the query and return the top MAX_RESULTS."""
-        return rank_notes(query, self.all())[:MAX_RESULTS]
+        """Rank all notes with the configured strategy and return the top MAX_RESULTS."""
+        return self._ranker.rank(query, self.all())[:MAX_RESULTS]

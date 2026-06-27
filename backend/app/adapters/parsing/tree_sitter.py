@@ -44,6 +44,18 @@ SYMBOL_TYPES: dict[str, set[str]] = {
     "javascript": {"function_declaration", "method_definition", "class_declaration"},
 }
 
+# class/interface nodes whose heritage (bases / implements) we extract for the inheritance graph
+_CLASS_NODES = {"class_definition", "class_declaration", "interface_declaration"}
+# node types that name a type/superclass across the python + typescript grammars
+_TYPE_NODES = {
+    "identifier",
+    "attribute",
+    "type_identifier",
+    "member_expression",
+    "nested_type_identifier",
+    "generic_type",
+}
+
 _parsers: dict[str, Parser] = {}
 
 
@@ -79,6 +91,7 @@ class TreeSitterParser:
         while stack:
             node = stack.pop()
             if node.type in targets:
+                bases, implements = _bases_of(node, lang) if node.type in _CLASS_NODES else ([], [])
                 spans.append(
                     SymbolSpan(
                         kind=node.type,
@@ -87,6 +100,8 @@ class TreeSitterParser:
                         end_byte=node.end_byte,
                         start_line=node.start_point[0] + 1,
                         end_line=node.end_point[0] + 1,
+                        bases=bases,
+                        implements=implements,
                     )
                 )
             stack.extend(reversed(node.children))
@@ -103,3 +118,65 @@ def _name_of(node) -> str | None:  # noqa: ANN001 — tree_sitter.Node
         if child.type in {"identifier", "type_identifier", "property_identifier"}:
             return (child.text or b"").decode("utf-8", "ignore")
     return None
+
+
+def _decode(node) -> str:  # noqa: ANN001 — tree_sitter.Node
+    """Bare last segment of a type/identifier node, utf-8 decoded.
+
+    `abc.ABC` → `ABC`, `Base<T>` → `Base`, `Foo` → `Foo`. We match against same-repo symbol
+    *names* (the graph keys on bare names), so we strip namespace/type-args the way an
+    unqualified reference would appear.
+    """
+    raw = (node.text or b"").decode("utf-8", "ignore")
+    return raw.split(".")[-1].split("<")[0].strip()
+
+
+def _bases_of(node, lang: str) -> tuple[list[str], list[str]]:  # noqa: ANN001 — tree_sitter.Node
+    """`(extends, implements)` supertype names for a class/interface node.
+
+    Defensive: reads children by node *type* (not fragile field names), tolerates missing
+    heritage, skips Python `metaclass=`/kwargs (only `identifier`/`attribute` count) and TS
+    `type_arguments`. External bases (ABC, library types) come back as plain names; the graph
+    layer decides whether they resolve to a known symbol.
+    """
+    extends: list[str] = []
+    implements: list[str] = []
+
+    if lang == "python":
+        args = node.child_by_field_name("superclasses")
+        if args is None:  # fallback: locate the argument_list child by type
+            args = next((c for c in node.children if c.type == "argument_list"), None)
+        if args is not None:
+            extends = [
+                name
+                for c in args.named_children
+                if c.type in {"identifier", "attribute"} and (name := _decode(c))
+            ]
+        return extends, implements
+
+    # TypeScript / TSX / JS
+    if node.type == "interface_declaration":
+        clause = next((c for c in node.children if c.type == "extends_type_clause"), None)
+        if clause is not None:
+            extends = [
+                name
+                for c in clause.named_children
+                if c.type in _TYPE_NODES and (name := _decode(c))
+            ]
+        return extends, implements
+
+    heritage = next((c for c in node.children if c.type == "class_heritage"), None)
+    for clause in heritage.children if heritage is not None else node.children:
+        if clause.type == "extends_clause":
+            for c in clause.named_children:  # first type-ish child is the superclass
+                if c.type in _TYPE_NODES and (name := _decode(c)):
+                    extends.append(name)
+                    break
+        elif clause.type == "implements_clause":
+            implements.extend(
+                name
+                for c in clause.named_children
+                if c.type in _TYPE_NODES and (name := _decode(c))
+            )
+
+    return extends, implements

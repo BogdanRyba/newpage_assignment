@@ -98,6 +98,30 @@ def test_module_level_docstring_and_constants_are_chunked() -> None:
     assert any(c.symbol == "helper" for c in chunks)  # the function is still its own chunk
 
 
+INHERIT_FILE = """\
+from abc import ABC, abstractmethod
+
+
+class Base(ABC):
+    @abstractmethod
+    def run(self): ...
+
+
+class Derived(Base):
+    def run(self):
+        return 1
+"""
+
+
+def test_class_chunk_carries_base_classes() -> None:
+    # Inheritance metadata must flow chunk → graph; if it doesn't, EXTENDS edges never form.
+    chunks = chunk_file("r1", "h.py", INHERIT_FILE, PARSER)
+    derived = next(c for c in chunks if c.symbol == "Derived")
+    base = next(c for c in chunks if c.symbol == "Base")
+    assert derived.bases == ["Base"]  # subclass records its parent
+    assert base.bases == ["ABC"]  # external base captured by name
+
+
 def test_unknown_language_falls_back_to_blocks() -> None:
     src = 'fn main() {\n    println!("hi");\n}\n' * 3
     chunks = chunk_file("r1", "main.rs", src, PARSER)

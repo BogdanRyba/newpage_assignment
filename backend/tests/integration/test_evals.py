@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from evals.run import RECALL_MIN, _check, run
+from evals.run import MRR_MIN, RECALL_MIN, _check, run
 
 pytestmark = pytest.mark.integration
 
@@ -20,9 +20,9 @@ async def test_eval_gate_meets_thresholds() -> None:
     result = await run()
     metrics = result["metrics"]
 
-    assert metrics["n_cases"] == 7
+    assert metrics["n_cases"] == 10
     assert metrics["recall_at_k"] >= RECALL_MIN
-    assert metrics["mrr"] >= 0.5
+    assert metrics["mrr"] >= MRR_MIN
     # With cassettes present, answer metrics are computed and must clear the gate.
     if metrics["answer_metrics_computed"]:
         assert metrics["faithfulness"] is None or metrics["faithfulness"] >= 0.7

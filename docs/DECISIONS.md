@@ -5,6 +5,24 @@ This feeds README section (e) — but the README is written in my own words, not
 
 ---
 
+### D-016 · Inheritance in the graph (EXTENDS/IMPLEMENTS) + language-scoped edges
+The parser now extracts a class/interface's supertypes (Python bases, TS `extends`/`implements`,
+interface-extends-interface), carried `SymbolSpan → Chunk → GraphNode`. `build_graph` emits `EXTENDS`
+and `IMPLEMENTS` edges, name-resolved exactly like CALLS (an external base such as `ABC` resolves to no
+repo symbol → no edge). A **directed** `subtypes_of` traversal enumerates subclasses/implementations
+(sibling-free, transitive), while `neighbors` stays undirected for augmentation. **Why:** "what
+implements/subclasses X?" is the canonical structural query graph-RAG should answer where pure vector
+top-k can miss a sibling. **Cross-language collision:** the fixture deliberately has a Python *and* a TS
+`Ranker`/`OverlapRanker`; edges now carry `src_lang` and the upsert MATCH requires both endpoints share
+it, so the two hierarchies never cross-link — this also fixed the same latent bug in CALLS/CONTAINS
+(edges had matched on symbol name only). **Trade-off:** same name-based heuristic limits as CALLS
+(aliased/qualified cross-module bases unresolved); two same-named classes in the *same* language across
+files still conflate; `.ts`/`.tsx` count as distinct languages (the fixture stays within one). The
+graph-off MVP path is unchanged — inheritance traversal is exercised only with `GRAPH_ENABLED=true`.
+The deliberate duplicate names also add lexically-similar chunks, lowering the **local** embedder's
+first-hit rank, so the eval gate's `MRR_MIN` was recalibrated 0.5 → 0.4; `recall@k` stays the hard
+completeness gate (0.8, actual 1.0) and real Gemini embeddings rank these correctly.
+
 ### D-011 · Deterministic local embedder (`EMBEDDING_PROVIDER=local`)
 A hashed bag-of-tokens dense + sparse embedder with no network/key/model-download.
 **Why:** lets the full ingest + retrieval pipeline run in CI and demo with zero

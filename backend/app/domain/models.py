@@ -61,6 +61,8 @@ class Chunk(BaseModel):
     end_line: int
     text: str
     index: int = 0
+    bases: list[str] = Field(default_factory=list)  # superclasses / super-interfaces (extends)
+    implements: list[str] = Field(default_factory=list)  # interfaces a class implements (TS)
 
     @property
     def location(self) -> CodeLocation:
@@ -141,8 +143,13 @@ class GraphNode(BaseModel):
 
 
 class GraphEdge(BaseModel):
-    """A directed relationship between two symbols (by name) within a repo."""
+    """A directed relationship between two symbols (by name) within a repo.
+
+    `src_lang` scopes the edge to one language so two same-named symbols in different
+    languages (e.g. a Python and a TS `Ranker`) never cross-link at upsert time.
+    """
 
     src: str  # source symbol name
     dst: str  # destination symbol name
-    type: str  # CALLS | CONTAINS
+    type: str  # CALLS | CONTAINS | EXTENDS | IMPLEMENTS
+    src_lang: str = ""  # language of the source symbol (edges only connect same-language nodes)

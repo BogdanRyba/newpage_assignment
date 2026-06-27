@@ -12,6 +12,18 @@ Hybrid: dense (semantic) + sparse (lexical/SPLADE) searched as named vectors in 
 **RRF fusion** merges the two ranked lists without reconciling score scales: `score(d) = Σ 1/(k + rank)`,
 `k=60`. Optional cross-encoder rerank (gated `RERANK_ENABLED`) sharpens the top to `TOP_K`.
 
+## Graph augmentation (opt-in, `GRAPH_ENABLED=true`)
+A `:Symbol` graph (built during ingest, every node tagged `repo_id`) carries `CALLS` + `CONTAINS`
+edges and — for classes/interfaces — `EXTENDS`/`IMPLEMENTS` edges from parsed supertypes. The
+`graph_augment` node pulls structurally-related symbols of the top hits into context; a keyword
+dispatcher deepens traversal (depth 2) for structural questions ("who calls X", "subclasses of Y").
+
+**Polymorphism is handled two ways.** "How do the ranking strategies differ?" is answered graph-off,
+by vector retrieval over the sibling subclass chunks + synthesis. "What are *all* the implementations
+of `Ranker`?" is the structural case: a directed `subtypes_of` traversal enumerates subtypes
+deterministically, where vector top-k might miss one. Inheritance edges are name-resolved (like CALLS)
+and **language-scoped** — a Python and a TypeScript `Ranker` never cross-link (see DECISIONS D-016).
+
 ## Generation (generator-critic)
 Prompt contract (`prompts/synthesis.py`): answer only from the numbered chunks; cite `[n]`; if the
 chunks don't contain the answer, say so. The `critic` (`prompts/critic.py`) validates each `[n]` for

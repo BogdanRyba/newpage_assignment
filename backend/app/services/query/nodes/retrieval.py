@@ -15,10 +15,12 @@ from app.services.query.state import Deps, QueryState
 
 Node = Callable[[QueryState], Awaitable[dict]]
 
-# Cheap dispatcher: structural questions ("who calls X", "blast radius") want deeper graph
-# expansion; semantic questions stay at depth 1.
+# Cheap dispatcher: structural questions ("who calls X", "subclasses of Y", "blast radius") want
+# deeper graph expansion (transitive subtype chains need 2 hops); semantic ones stay at depth 1.
 _STRUCTURAL = re.compile(
-    r"\b(who calls|caller|callee|call graph|depend|import|used by|blast radius|reference)\b",
+    r"\b(who calls|caller|callee|call graph|depend|import|used by|blast radius|reference"
+    r"|subclass|sub-class|implementation|implements|inherit|extends|override|polymorph"
+    r"|abstract|derive[ds]?|base class)\b",
     re.IGNORECASE,
 )
 

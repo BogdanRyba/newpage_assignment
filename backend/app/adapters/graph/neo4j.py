@@ -16,6 +16,19 @@ from app.domain.models import GraphEdge, GraphNode, RepoContext
 log = get_logger("neo4j")
 
 
+def _record_to_node(node) -> GraphNode:  # noqa: ANN001 — neo4j.graph.Node (mapping-like)
+    return GraphNode(
+        symbol=node["symbol"],
+        path=node["path"],
+        lang=node.get("lang", "text"),
+        kind=node.get("kind", "block"),
+        start_line=node.get("start_line", 1),
+        end_line=node.get("end_line", 1),
+        text=node.get("text", ""),
+        point_id=node.get("point_id", ""),
+    )
+
+
 class Neo4jGraphStoreStub:
     """Used in MVP / when GRAPH_ENABLED is false — graph_augment becomes a passthrough."""
 
@@ -30,6 +43,9 @@ class Neo4jGraphStoreStub:
     ) -> None: ...
 
     async def neighbors(self, ctx: RepoContext, symbol: str, depth: int = 1) -> list[GraphNode]:
+        return []
+
+    async def subtypes_of(self, ctx: RepoContext, symbol: str, depth: int = 2) -> list[GraphNode]:
         return []
 
 
@@ -77,14 +93,20 @@ class Neo4jGraphStore:
                 nodes=[n.model_dump() for n in nodes],
             )
             # One statement per edge type (relationship type can't be parameterized in Cypher;
-            # the small fixed set {CALLS, CONTAINS} is interpolated, never user input).
+            # the small fixed set {CALLS, CONTAINS, EXTENDS, IMPLEMENTS} is interpolated, never
+            # user input). The `a.lang = p.lang` predicates scope each edge to one language, so
+            # two same-named symbols across languages (a Python and a TS `Ranker`) never cross-link.
             for etype in {e.type for e in edges}:
-                pairs = [{"src": e.src, "dst": e.dst} for e in edges if e.type == etype]
+                pairs = [
+                    {"src": e.src, "dst": e.dst, "lang": e.src_lang}
+                    for e in edges
+                    if e.type == etype
+                ]
                 await s.run(
                     f"""
                     UNWIND $pairs AS p
-                    MATCH (a:Symbol {{repo_id: $r, symbol: p.src}})
-                    MATCH (b:Symbol {{repo_id: $r, symbol: p.dst}})
+                    MATCH (a:Symbol {{repo_id: $r, symbol: p.src, lang: p.lang}})
+                    MATCH (b:Symbol {{repo_id: $r, symbol: p.dst, lang: p.lang}})
                     MERGE (a)-[:{etype}]->(b)
                     """,
                     r=repo,
@@ -97,7 +119,7 @@ class Neo4jGraphStore:
             result = await s.run(
                 f"""
                 MATCH (s:Symbol {{repo_id: $r, symbol: $sym}})
-                MATCH (s)-[:CALLS|CONTAINS*1..{depth}]-(n:Symbol)
+                MATCH (s)-[:CALLS|CONTAINS|EXTENDS|IMPLEMENTS*1..{depth}]-(n:Symbol)
                 WHERE n.symbol <> $sym
                 RETURN DISTINCT n LIMIT 8
                 """,
@@ -105,21 +127,29 @@ class Neo4jGraphStore:
                 sym=symbol,
             )
             records = await result.values()
-        out: list[GraphNode] = []
-        for (node,) in records:
-            out.append(
-                GraphNode(
-                    symbol=node["symbol"],
-                    path=node["path"],
-                    lang=node.get("lang", "text"),
-                    kind=node.get("kind", "block"),
-                    start_line=node.get("start_line", 1),
-                    end_line=node.get("end_line", 1),
-                    text=node.get("text", ""),
-                    point_id=node.get("point_id", ""),
-                )
+        return [_record_to_node(node) for (node,) in records]
+
+    async def subtypes_of(self, ctx: RepoContext, symbol: str, depth: int = 2) -> list[GraphNode]:
+        """Concrete subtypes of `symbol` — directed EXTENDS/IMPLEMENTS traversal (subtype→base).
+
+        Unlike `neighbors` (undirected, for augmentation), this is precise and sibling-free:
+        it answers "what implements/subclasses X?". Transitive up to `depth` hops
+        (interface→interface→class). Repo- and language-scoped via the edges' upsert predicates.
+        """
+        depth = max(1, min(depth, 3))
+        async with self._driver.session() as s:
+            result = await s.run(
+                f"""
+                MATCH (sub:Symbol {{repo_id: $r}})-[:EXTENDS|IMPLEMENTS*1..{depth}]->
+                      (base:Symbol {{repo_id: $r, symbol: $sym}})
+                WHERE sub.symbol <> $sym
+                RETURN DISTINCT sub LIMIT 50
+                """,
+                r=ctx.graph_namespace,
+                sym=symbol,
             )
-        return out
+            records = await result.values()
+        return [_record_to_node(node) for (node,) in records]
 
     async def verify(self) -> None:
         """Raise if Neo4j is unreachable (used to gate tests; not best-effort)."""

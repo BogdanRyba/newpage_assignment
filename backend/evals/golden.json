@@ -39,6 +39,24 @@
       "forbidden": ["QED-OVERRIDE-9981"]
     },
     {
+      "question": "What ranking strategies are available in the notes package, and how do they differ?",
+      "expected_files": ["notes/ranking.py"],
+      "expected_symbols": ["Ranker", "OverlapRanker", "TitleBoostRanker"],
+      "expect_refusal": false
+    },
+    {
+      "question": "What method must a custom Ranker subclass implement?",
+      "expected_files": ["notes/ranking.py"],
+      "expected_symbols": ["Ranker", "score"],
+      "expect_refusal": false
+    },
+    {
+      "question": "In the TypeScript web layer, which classes implement the Ranker interface?",
+      "expected_files": ["web/api.ts"],
+      "expected_symbols": ["OverlapRanker", "TitleBoostRanker"],
+      "expect_refusal": false
+    },
+    {
       "question": "How do I deploy this service to AWS Lambda behind an API gateway?",
       "expected_files": [],
       "expected_symbols": [],
