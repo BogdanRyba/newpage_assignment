@@ -28,14 +28,15 @@ def chunk_file(repo_id: str, path: str, source: str, parser: Parser) -> list[Chu
     if parser.supports(path):
         spans = parser.parse_symbols(path, source)
         if spans:
-            return _chunk_symbols(repo_id, path, lang, source.encode("utf-8"), spans)
+            return _chunk_symbols(repo_id, path, lang, source, spans)
 
     return _fallback(repo_id, path, lang, source)
 
 
 def _chunk_symbols(
-    repo_id: str, path: str, lang: str, data: bytes, spans: list[SymbolSpan]
+    repo_id: str, path: str, lang: str, source: str, spans: list[SymbolSpan]
 ) -> list[Chunk]:
+    data = source.encode("utf-8")
     chunks: list[Chunk] = []
     idx = 0
     for span in spans:
@@ -73,7 +74,62 @@ def _chunk_symbols(
                 )
             )
             idx += 1
+
+    # Module-level residual: docstrings, top-level constants (e.g. prompt SYSTEM strings),
+    # config values, imports — content NOT inside any symbol span, which AST chunking would
+    # otherwise drop, leaving it unretrievable. Emit it as `module` chunks.
+    _emit_module_chunks(chunks, repo_id, path, lang, source, spans, idx)
     return chunks
+
+
+def _emit_module_chunks(
+    chunks: list[Chunk],
+    repo_id: str,
+    path: str,
+    lang: str,
+    source: str,
+    spans: list[SymbolSpan],
+    idx: int,
+) -> None:
+    lines = source.splitlines()
+    n = len(lines)
+    covered = [False] * (n + 2)
+    for span in spans:
+        for ln in range(span.start_line, min(span.end_line, n) + 1):
+            covered[ln] = True
+
+    i = 1
+    while i <= n:
+        if covered[i]:
+            i += 1
+            continue
+        j = i
+        while j <= n and not covered[j]:
+            j += 1
+        run = lines[i - 1 : j - 1]
+        if _meaningful(run):
+            for block in recursive_split("\n".join(run)):
+                chunks.append(
+                    Chunk(
+                        repo_id=repo_id,
+                        path=path,
+                        lang=lang,
+                        symbol=None,
+                        kind="module",
+                        start_line=i + block.start_line - 1,
+                        end_line=i + block.end_line - 1,
+                        text=with_context(path, None, block.text),
+                        index=idx,
+                    )
+                )
+                idx += 1
+        i = j
+
+
+def _meaningful(run_lines: list[str]) -> bool:
+    """Skip trivial gaps (blank lines, a lone import); keep docstrings/constants/config."""
+    non_blank = [ln for ln in run_lines if ln.strip()]
+    return len(non_blank) >= 2 or len("".join(non_blank).strip()) >= 40
 
 
 def _fallback(repo_id: str, path: str, lang: str, source: str) -> list[Chunk]:

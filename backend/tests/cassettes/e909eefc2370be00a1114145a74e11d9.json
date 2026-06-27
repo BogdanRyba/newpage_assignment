@@ -1,5 +1,0 @@
-{
-  "kind": "complete",
-  "model": "gemini-3.5-flash",
-  "result": "The calculator adds a value to its running total using the `add` method of the `Calculator` class [2]. This method takes a float `value`, adds it to the running total attribute `self.total` using the `+=` operator, and then returns the updated total [1], [2]."
-}

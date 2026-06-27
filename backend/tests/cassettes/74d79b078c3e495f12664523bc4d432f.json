@@ -1,5 +1,0 @@
-{
-  "kind": "complete",
-  "model": "gemini-3.5-flash",
-  "result": "{\"faithfulness\": 1.0, \"reason\": \"The answer is fully supported by the cited sources, which show the `reset` method of the `Calculator` class setting `self.total` to `0.0`.\"}"
-}

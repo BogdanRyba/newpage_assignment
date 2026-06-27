@@ -39,8 +39,8 @@ async def test_ingest_then_retrieve_finds_expected_symbol() -> None:
         fresh = await repos.get(repo.id)
         assert fresh is not None
         assert fresh.status == "ready"
-        assert fresh.file_count >= 2  # calculator.py + tokens.ts (+ README)
-        assert fresh.chunk_count >= 3
+        assert fresh.file_count >= 5  # notes/*.py + web/api.ts + README
+        assert fresh.chunk_count >= 6
 
     ctx = RepoContext(repo_id=repo.id)
     vectors = make_vector_store()
@@ -48,7 +48,7 @@ async def test_ingest_then_retrieve_finds_expected_symbol() -> None:
         assert await vectors.count(ctx) == fresh.chunk_count  # Qdrant ↔ Postgres agree
 
         embedder = make_embedder()
-        qv = await embedder.embed_query("Calculator add to the running total")
+        qv = await embedder.embed_query("How does NoteStore search notes?")
         hits = await vectors.search_dense(ctx, qv, limit=5)
         assert hits, "retrieval returned nothing"
 
@@ -56,8 +56,13 @@ async def test_ingest_then_retrieve_finds_expected_symbol() -> None:
         blob = " ".join(
             (h.payload.get("text") or "") + " " + (h.payload.get("symbol") or "") for h in hits
         )
-        assert "Calculator" in blob or "add" in blob
-        assert any("calculator.py" in (h.payload.get("path") or "") for h in hits)
+        assert "NoteStore" in blob or "search" in blob
+        assert any("notes/store.py" in (h.payload.get("path") or "") for h in hits)
+
+        # Module-level constants must be retrievable too (the module-chunk fix).
+        cv = await embedder.embed_query("maximum number of search results stopwords config")
+        cfg_hits = await vectors.search_dense(ctx, cv, limit=5)
+        assert any("notes/config.py" in (h.payload.get("path") or "") for h in cfg_hits)
 
         # Idempotency: a second ingest must not duplicate points.
         async with SessionLocal() as session:

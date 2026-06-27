@@ -121,5 +121,9 @@ class Neo4jGraphStore:
             )
         return out
 
+    async def verify(self) -> None:
+        """Raise if Neo4j is unreachable (used to gate tests; not best-effort)."""
+        await self._driver.verify_connectivity()
+
     async def aclose(self) -> None:
         await self._driver.close()

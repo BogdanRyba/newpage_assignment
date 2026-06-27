@@ -2,7 +2,7 @@
 
 Run with the graph profile:
     GRAPH_ENABLED=true docker compose --profile graph up -d neo4j postgres qdrant redis
-    docker compose run --rm -e GRAPH_ENABLED=true api pytest -m integration tests/integration/test_graph_store.py
+    docker compose run --rm -e GRAPH_ENABLED=true api pytest -m integration -k graph_store
 """
 
 from __future__ import annotations
@@ -32,6 +32,7 @@ async def _store_or_skip():
 
     store = Neo4jGraphStore()
     try:
+        await store.verify()  # raises if Neo4j is unreachable (ensure_schema is best-effort)
         await store.ensure_schema()
     except Exception as exc:  # noqa: BLE001
         await store.aclose()

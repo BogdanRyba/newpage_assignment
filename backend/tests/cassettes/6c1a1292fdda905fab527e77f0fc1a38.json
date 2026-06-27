@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "```json\n{\"faithfulness\": 1.0, \"reason\": \"All steps in the answer are fully supported by the cited sources from web/api.ts.\"}\n```"
+}

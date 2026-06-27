@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "To search for notes, `NoteStore` performs the following steps:\n\n1. **Retrieves all notes**: It gets a list of all stored notes using `self.all()` [2].\n2. **Ranks the notes**: It passes the query and the list of all notes to `rank_notes` [2, 5]. This function splits the query into lowercase terms, removes common `STOPWORDS` [1, 8], scores each note, filters out notes with a score of 0 or less, and sorts the remaining notes in descending order of their score [1].\n3. **Limits the results**: It slices the ranked list of notes to return only the top `MAX_RESULTS` [2, 5], which is configured to 20 [8]."
+}

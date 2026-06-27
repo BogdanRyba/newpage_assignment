@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "The common words ignored as stopwords when ranking notes are: \"the\", \"a\", \"an\", \"to\", \"of\", \"and\", \"or\", \"is\", \"in\", \"on\", and \"for\" [1]."
+}

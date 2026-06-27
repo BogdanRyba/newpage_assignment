@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "{\"faithfulness\": 1.0, \"reason\": \"All claims in the answer are fully supported by the cited sources.\"}"
+}

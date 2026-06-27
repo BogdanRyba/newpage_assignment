@@ -22,7 +22,7 @@ from app.services.ingest_service import IngestService
 
 log = get_logger("seed")
 SAMPLE_PATH = Path(__file__).resolve().parents[2] / "sample_repo"
-SAMPLE_NAME = "ariadne-sample"
+SAMPLE_NAME = "notes-service"
 
 
 async def main() -> None:

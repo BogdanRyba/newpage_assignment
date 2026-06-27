@@ -22,8 +22,9 @@ docker compose up --build     # api :8000 · frontend :3000 · postgres · qdran
 ```
 
 `migrate` applies the schema, `seed` ingests the bundled [`backend/sample_repo`](backend/sample_repo)
-so the demo works immediately. Open **http://localhost:3000**, click **Sample → ariadne-sample**, and ask
-"How does the calculator add to its running total?"
+(a small polyglot `notes-service`) so the demo works immediately. Open **http://localhost:3000**, click
+**Sample → notes-service**, and ask "How does NoteStore search for notes?". A packaged
+`backend/sample_repo.zip` is also provided for the upload flow (`scripts/pack-fixture.sh` regenerates it).
 
 **Offline / no-key mode** (deterministic, zero credentials) — uses a local hashed embedder and
 replays recorded LLM cassettes:

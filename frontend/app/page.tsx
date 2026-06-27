@@ -34,9 +34,9 @@ const PHASE_LABELS = [
 ];
 
 const SUGGESTIONS = [
-  "How does chunking handle unsupported languages?",
-  "Is retrieval dense-only or hybrid?",
-  "Which files does ingestion skip?",
+  "How does NoteStore search for notes?",
+  "What is the maximum number of search results?",
+  "How are notes scored against a query?",
 ];
 
 export default function Page() {

@@ -12,6 +12,15 @@ credentials, and gives integration tests a deterministic retrieval substrate (co
 with cassettes for the LLM). **Trade-off:** lexical-overlap quality only — never a default
 for real use; Gemini stays the default provider.
 
+### D-015 · AST chunking also captures module-level content
+`_chunk_symbols` now emits `module` chunks for lines not inside any function/class span — module
+docstrings, top-level constants (prompt `SYSTEM` strings, `config` values), imports. **Why:** the
+AST-only chunker silently dropped module-level code, so "how is X defended/configured?" questions had
+nothing to retrieve and refused (caught during real-code testing). **Trade-off:** a few more chunks per
+file; filtered to meaningful runs (≥2 non-blank lines or ≥40 chars) to skip trivial gaps. Also split
+identifiers into subwords (camelCase/snake_case) in the **local** embedder so the offline eval reflects
+lexical intent (`createNote` ↔ "create note"); real Gemini embeddings already handle this semantically.
+
 ### D-014 · Graph RAG (Neo4j) — opt-in, name-based call/contains graph
 Implemented the graph seam: a `:Symbol` graph (CALLS + CONTAINS edges, every node tagged
 `repo_id`) built during ingest, and a `graph_augment` node that pulls callers/callees/containers

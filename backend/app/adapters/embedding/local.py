@@ -15,12 +15,21 @@ import re
 from app.domain.models import SparseVector
 
 _TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+# Split an identifier into subwords: camelCase, snake_case, digits.
+_SUBWORD = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+")
 DENSE_DIM = 256
 SPARSE_VOCAB = 1 << 20
 
 
 def _tokens(text: str) -> list[str]:
-    return [t.lower() for t in _TOKEN.findall(text)]
+    # Emit the whole identifier AND its subwords so "create note" matches `createNote`
+    # and "max results" matches `MAX_RESULTS` — closing the lexical gap of bag-of-tokens.
+    out: list[str] = []
+    for ident in _TOKEN.findall(text):
+        out.append(ident.lower())
+        for part in ident.split("_"):
+            out.extend(sub.lower() for sub in _SUBWORD.findall(part))
+    return out
 
 
 def _hash(token: str, mod: int) -> int:

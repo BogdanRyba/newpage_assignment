@@ -74,6 +74,30 @@ def test_empty_source_yields_no_chunks() -> None:
     assert chunk_file("r1", "calc.py", "   \n\n", PARSER) == []
 
 
+MODULE_FILE = '''\
+"""Module docstring describing what this configuration module is for."""
+
+MAX_RESULTS = 20
+STOPWORDS = {"the", "a", "an"}
+
+
+def helper():
+    return MAX_RESULTS
+'''
+
+
+def test_module_level_docstring_and_constants_are_chunked() -> None:
+    # Regression: top-level constants/docstrings (e.g. prompt SYSTEM strings) must be
+    # indexed, not dropped by AST chunking — otherwise design/config questions can't retrieve them.
+    chunks = chunk_file("r1", "config.py", MODULE_FILE, PARSER)
+    module_text = " ".join(c.text for c in chunks if c.kind == "module")
+    assert "module" in {c.kind for c in chunks}
+    assert "MAX_RESULTS" in module_text
+    assert "STOPWORDS" in module_text
+    assert "Module docstring" in module_text
+    assert any(c.symbol == "helper" for c in chunks)  # the function is still its own chunk
+
+
 def test_unknown_language_falls_back_to_blocks() -> None:
     src = 'fn main() {\n    println!("hi");\n}\n' * 3
     chunks = chunk_file("r1", "main.rs", src, PARSER)

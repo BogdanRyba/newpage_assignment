@@ -20,7 +20,7 @@ async def test_eval_gate_meets_thresholds() -> None:
     result = await run()
     metrics = result["metrics"]
 
-    assert metrics["n_cases"] == 5
+    assert metrics["n_cases"] == 6
     assert metrics["recall_at_k"] >= RECALL_MIN
     assert metrics["mrr"] >= 0.5
     # With cassettes present, answer metrics are computed and must clear the gate.

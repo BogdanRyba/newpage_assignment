@@ -1,32 +1,38 @@
 {
-  "repo": "ariadne-sample",
+  "repo": "notes-service",
   "cases": [
     {
-      "question": "How does the calculator add a value to its running total?",
-      "expected_files": ["calculator.py"],
-      "expected_symbols": ["add", "Calculator"],
+      "question": "How does NoteStore search for notes?",
+      "expected_files": ["notes/store.py"],
+      "expected_symbols": ["NoteStore", "search"],
       "expect_refusal": false
     },
     {
-      "question": "What happens when you divide by zero?",
-      "expected_files": ["calculator.py"],
-      "expected_symbols": ["divide"],
+      "question": "What is the maximum number of search results returned?",
+      "expected_files": ["notes/config.py"],
+      "expected_symbols": ["MAX_RESULTS"],
       "expect_refusal": false
     },
     {
-      "question": "How is the running total reset?",
-      "expected_files": ["calculator.py"],
-      "expected_symbols": ["reset"],
+      "question": "Which common words are ignored as stopwords when ranking notes?",
+      "expected_files": ["notes/config.py"],
+      "expected_symbols": ["STOPWORDS"],
       "expect_refusal": false
     },
     {
-      "question": "How does the tokenizer classify a token as a number or word?",
-      "expected_files": ["tokens.ts"],
-      "expected_symbols": ["classify", "tokenize"],
+      "question": "How are notes scored against a search query?",
+      "expected_files": ["notes/ranking.py"],
+      "expected_symbols": ["rank_notes", "_score"],
       "expect_refusal": false
     },
     {
-      "question": "How do I deploy this service to Kubernetes with autoscaling?",
+      "question": "How does searchNotes filter notes by query?",
+      "expected_files": ["web/api.ts"],
+      "expected_symbols": ["searchNotes"],
+      "expect_refusal": false
+    },
+    {
+      "question": "How do I deploy this service to AWS Lambda behind an API gateway?",
       "expected_files": [],
       "expected_symbols": [],
       "expect_refusal": true
