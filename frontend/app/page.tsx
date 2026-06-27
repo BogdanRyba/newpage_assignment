@@ -210,6 +210,7 @@ export default function Page() {
       input={input}
       setInput={setInput}
       send={send}
+      suggestions={suggestions}
       openFile={openFile}
       openCitation={openCitation}
       codeRef={codeRef}
@@ -407,13 +408,24 @@ function Workspace(props: {
   input: string;
   setInput: (s: string) => void;
   send: (raw?: string) => void;
+  suggestions: string[];
   openFile: SourceOut | null;
   openCitation: (c: { path: string; start: number; end: number }) => void;
   codeRef: React.RefObject<HTMLDivElement>;
   newRepo: () => void;
 }) {
-  const { repoMeta, messages, input, setInput, send, openFile, openCitation, codeRef, newRepo } =
-    props;
+  const {
+    repoMeta,
+    messages,
+    input,
+    setInput,
+    send,
+    suggestions,
+    openFile,
+    openCitation,
+    codeRef,
+    newRepo,
+  } = props;
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;

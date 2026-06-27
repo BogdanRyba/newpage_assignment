@@ -5,6 +5,18 @@ This feeds README section (e) — but the README is written in my own words, not
 
 ---
 
+### D-019 · Frontend gate = lint + type-check + render test (not just lint)
+`run-checks` now also runs `tsc --noEmit` and a vitest + Testing-Library render test on the frontend.
+**Why:** a real bug shipped — `suggestions` was used in `<Workspace>` but never passed as a prop, so
+the workspace crashed at runtime with `ReferenceError: suggestions is not defined`. `next lint` passed
+because ESLint defers `no-undef` to TypeScript, and the workspace screen was never rendered in CI (the
+initial SSR is the ingest screen; the backend was exercised with real requests but the UI render path
+wasn't). Type-check catches the undefined ref / prop mismatch deterministically; the render test drives
+`Page` to the workspace with the API boundary mocked and asserts the chips render — it fails (render
+throws) without the prop, passes with it. **Trade-off:** adds a small JS test toolchain (vitest, jsdom,
+Testing Library) and ~40s to the gate; worth it — "backend tested with real requests" left the render
+path unverified, which is exactly where this class of bug lives.
+
 ### D-018 · Stream node progress as a "thinking" trace; LLM-generated suggestions
 Two UX changes that both lean on the existing LangGraph/LangChain seams. (1) `AgentRunner.stream`
 now drives the graph with `astream(stream_mode="updates")` and emits a `status` event per node
