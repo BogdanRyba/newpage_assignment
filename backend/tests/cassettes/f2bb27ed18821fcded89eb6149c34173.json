@@ -1,5 +1,0 @@
-{
-  "kind": "complete",
-  "model": "gemini-3.5-flash",
-  "result": "Based on the provided sources, the `_score` function counts how many of the query terms appear anywhere in the note, which includes its title, body, and tags [3]. \n\nThis base score is used in two ways:\n* In `OverlapRanker`, the score returned is exactly the result of `_score(note, terms)` [3].\n* In `TitleBoostRanker`, the score is the result of `_score(note, terms)` plus an additional point for each query term that matches the note's title, effectively counting title matches double [7]."
-}

@@ -1,5 +1,0 @@
-{
-  "kind": "complete",
-  "model": "gemini-3.5-flash",
-  "result": "{\"faithfulness\": 1.0, \"reason\": \"The answer is fully supported by the provided sources, correctly identifying the maximum number of search results as 20 and citing the appropriate configuration and store files.\"}"
-}

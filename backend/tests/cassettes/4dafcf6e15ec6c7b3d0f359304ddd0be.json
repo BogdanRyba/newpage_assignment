@@ -1,5 +1,0 @@
-{
-  "kind": "complete",
-  "model": "gemini-3.5-flash",
-  "result": "The `searchNotes` function filters notes by performing the following steps:\n\n1. It converts the query to lowercase [5].\n2. It filters the list of notes, keeping only those whose lowercase title or lowercase body contains the lowercase query [5].\n3. It slices and returns the filtered results up to the specified `limit` (which defaults to `DEFAULT_LIMIT`) [5]."
-}

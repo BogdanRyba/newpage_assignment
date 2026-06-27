@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "A custom `Ranker` subclass must implement the `score` method [2][3]."
+}

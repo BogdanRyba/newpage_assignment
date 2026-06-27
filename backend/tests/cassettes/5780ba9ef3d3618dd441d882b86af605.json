@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "{\"faithfulness\": 1.0, \"reason\": \"The answer is fully supported by the cited sources, which define MAX_RESULTS as 20 and show its usage in slicing the search results.\"}"
+}

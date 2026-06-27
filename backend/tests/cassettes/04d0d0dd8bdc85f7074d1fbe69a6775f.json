@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "The `_score` function ranks a note against a set of query terms by calculating the number of overlapping terms between the note's text and the query [4]. \n\nSpecifically, it:\n1. Extracts the terms from the note's text using `_terms(note.text())` [4].\n2. Finds the intersection of these note terms and the query `terms` set using the set intersection operator (`&`) [4].\n3. Returns the count of these overlapping terms using `len()` [4].\n\nThis base score is used directly by the `OverlapRanker` [7], and is combined with additional title-matching logic in the `TitleBoostRanker` [5]."
+}

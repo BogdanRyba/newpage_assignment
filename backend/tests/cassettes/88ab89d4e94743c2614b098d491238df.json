@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "`NoteStore` searches for notes by delegating the task to an injected `Ranker` strategy, which defaults to an `OverlapRanker` [4]. \n\nSpecifically, the `search` method:\n1. Retrieves all stored notes using `self.all()` [1, 4].\n2. Calls the ranker's `rank` method with the query and the list of all notes [1, 4]. The ranker extracts query terms, scores each note, filters out notes with no term overlap, and sorts the remaining notes by score in descending order [5, 6].\n3. Slices and returns the top `MAX_RESULTS` from the ranked list [1, 4]."
+}

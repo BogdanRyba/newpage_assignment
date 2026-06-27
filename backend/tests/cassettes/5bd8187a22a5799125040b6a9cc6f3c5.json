@@ -1,5 +1,0 @@
-{
-  "kind": "complete",
-  "model": "gemini-3.5-flash",
-  "result": "{\"faithfulness\": 1.0, \"reason\": \"The answer is fully supported by the provided sources, accurately explaining the behavior of _score and its usage in OverlapRanker and TitleBoostRanker.\"}"
-}

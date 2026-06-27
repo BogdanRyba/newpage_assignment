@@ -19,6 +19,12 @@ _TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _SUBWORD = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+")
 DENSE_DIM = 256
 SPARSE_VOCAB = 1 << 20
+# The contextual header (`# path · symbol`, prepended by chunking's with_context) names the
+# symbol a chunk defines and its file — the highest-signal tokens for "how does X work?" /
+# "the web layer" queries. Boost them so a distinctive symbol/file token outweighs the common
+# body tokens (note, search, self, return) that otherwise drown it out in a plain bag-of-tokens.
+# This is the lexical stand-in for what a semantic embedder does; real Gemini needs no such hint.
+HEADER_BOOST = 4.0
 
 
 def _tokens(text: str) -> list[str]:
@@ -30,6 +36,18 @@ def _tokens(text: str) -> list[str]:
         for part in ident.split("_"):
             out.extend(sub.lower() for sub in _SUBWORD.findall(part))
     return out
+
+
+def _weighted_tokens(text: str) -> list[tuple[str, float]]:
+    """Tokens with weights. A leading `# …` context line (the chunk's path · symbol header) is
+    weighted HEADER_BOOST; body tokens weigh 1.0. Queries carry no header, so every query token
+    weighs 1.0 — the boost only sharpens *documents* toward the symbol/file they're about."""
+    header, sep, body = text.partition("\n")
+    if header.startswith("# "):
+        weighted = [(tok, HEADER_BOOST) for tok in _tokens(header)]
+        weighted += [(tok, 1.0) for tok in _tokens(body)]
+        return weighted
+    return [(tok, 1.0) for tok in _tokens(text)]
 
 
 def _hash(token: str, mod: int) -> int:
@@ -49,8 +67,8 @@ class LocalHashEmbedder:
 
     def _vec(self, text: str) -> list[float]:
         v = [0.0] * self._dim
-        for tok in _tokens(text):
-            v[_hash(tok, self._dim)] += 1.0
+        for tok, weight in _weighted_tokens(text):
+            v[_hash(tok, self._dim)] += weight
         norm = math.sqrt(sum(x * x for x in v)) or 1.0
         return [x / norm for x in v]
 
@@ -67,8 +85,9 @@ class LocalHashSparse:
 
     def _sparse(self, text: str) -> SparseVector:
         counts: dict[int, float] = {}
-        for tok in _tokens(text):
-            counts[_hash(tok, self._vocab)] = counts.get(_hash(tok, self._vocab), 0.0) + 1.0
+        for tok, weight in _weighted_tokens(text):
+            idx = _hash(tok, self._vocab)
+            counts[idx] = counts.get(idx, 0.0) + weight
         items = sorted(counts.items())
         return SparseVector(indices=[i for i, _ in items], values=[v for _, v in items])
 

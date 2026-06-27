@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "The available ranking strategies in the `notes` package are:\n\n* **`OverlapRanker`**: This strategy counts how many query terms appear anywhere in the note, including its title, body, and tags [4]. It is also used as the default ranking strategy in the `rank_notes` helper function [6].\n* **`TitleBoostRanker`**: This is a second concrete ranking strategy [1]. (Its specific implementation details are not provided in the sources).\n\nBoth strategies inherit from or implement the `Ranker` base strategy [1, 5]. The `Ranker` interface defines a `score` method for individual notes, and provides a shared `rank` method that orders notes by their score (highest first) and filters out notes with no query term overlap [5, 8]."
+}

@@ -1,0 +1,5 @@
+{
+  "kind": "complete",
+  "model": "gemini-3.5-flash",
+  "result": "{\"faithfulness\": 1.0, \"reason\": \"The answer is fully supported by the provided sources, which state that a custom Ranker subclass must implement the score method.\"}"
+}
