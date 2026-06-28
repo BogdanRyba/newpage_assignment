@@ -113,6 +113,21 @@ services:
     depends_on:
       api: { condition: service_healthy }
 
+  # Real browser E2E (profile e2e). Driven by scripts/e2e.sh, which brings up the stack with
+  # NEXT_PUBLIC_API_BASE=http://api:8000 so the in-container browser reaches the API by DNS.
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.48.0-jammy
+    profiles: ["e2e"]
+    working_dir: /e2e
+    volumes: ["./tests/e2e:/e2e"]
+    environment:
+      BASE_URL: http://frontend:3000
+      CI: "true"
+    command: sh -c "npm install --no-audit --no-fund && npx playwright test"
+    depends_on:
+      api: { condition: service_healthy }
+      frontend: { condition: service_started }
+
   # Stretch (graph RAG). Disabled by default; enable with:
   #   docker compose --profile graph up
   neo4j:

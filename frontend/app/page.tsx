@@ -590,7 +590,10 @@ function MessageView({
           })}
         </div>
       )}
-      <div style={{ fontSize: 15, lineHeight: 1.68, color: "#38332D" }}>
+      <div
+        style={{ fontSize: 15, lineHeight: 1.68, color: "#38332D" }}
+        data-testid="daedalus-answer"
+      >
         {renderSegments(m.text, m.citations, onCite)}
         {m.streaming && (m.text.length > 0 || m.steps.length === 0) && (
           <span

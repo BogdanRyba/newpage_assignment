@@ -143,10 +143,12 @@ export async function streamChat(
     const { value, done } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
-    const frames = buffer.split("\n\n");
+    // sse_starlette delimits events with CRLF (`\r\n\r\n`), so split on either CRLF or LF —
+    // splitting on "\n\n" alone never matches and no event is ever parsed (the chat hangs).
+    const frames = buffer.split(/\r?\n\r?\n/);
     buffer = frames.pop() ?? "";
     for (const frame of frames) {
-      const dataLine = frame.split("\n").find((l) => l.startsWith("data:"));
+      const dataLine = frame.split(/\r?\n/).find((l) => l.startsWith("data:"));
       if (!dataLine) continue;
       try {
         onEvent(JSON.parse(dataLine.slice(5).trim()) as ChatEvent);

@@ -5,6 +5,25 @@ This feeds README section (e) — but the README is written in my own words, not
 
 ---
 
+### D-020 · Chat SSE parser handles CRLF; real browser E2E added
+The browser chat rendered nothing (just a cursor) though the backend SSE delivered the full stream.
+Root cause: `streamChat` split the fetch byte stream on `"\n\n"`, but `sse_starlette` delimits events
+with `\r\n\r\n` (default `DEFAULT_SEPARATOR="\r\n"`), so no frame ever matched and `onEvent` never
+fired. The ingest stream was fine because it uses the browser-native `EventSource` (CRLF-aware); only
+the custom POST-SSE reader was broken. **Fix:** split on `/\r?\n\r?\n/` (and lines on `/\r?\n/`).
+**Why it slipped — and the real fix to the process:** the chat integration test read with httpx
+`aiter_lines()` (CRLF-tolerant) and the vitest render test *mocked* `streamChat`; neither exercised the
+real byte parser, and CI never rendered a chat answer in a browser. Added two guards: (1) a
+deterministic vitest test that feeds a **CRLF-delimited** `ReadableStream` through `streamChat` and
+asserts events parse (fails on `"\n\n"`, passes on the fix); (2) a **real Playwright E2E**
+(`scripts/e2e.sh` + `tests/e2e/`) that drives the actual UI against the real backend + Gemini,
+ingests a public repo, and asserts the streamed answer + citations render. It runs the frontend with
+`NEXT_PUBLIC_API_BASE=http://api:8000` so the in-container browser reaches the API by compose DNS.
+**Trade-off:** the E2E needs a Gemini key + the Playwright image + minutes, so it's a separate gate
+(`scripts/e2e.sh`), not part of the fast offline `run-checks`. Also fixed an adjacent bug: ingest
+progress published `chunks_done` without `files_done` during embedding, so the Indexing screen showed
+"0 files" — `_progress` now carries the latest counts on every publish.
+
 ### D-019 · Frontend gate = lint + type-check + render test (not just lint)
 `run-checks` now also runs `tsc --noEmit` and a vitest + Testing-Library render test on the frontend.
 **Why:** a real bug shipped — `suggestions` was used in `<Workspace>` but never passed as a prop, so

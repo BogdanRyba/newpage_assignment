@@ -32,3 +32,8 @@ npm-debug.log*
 # Local clones / uploads handled at runtime
 backend/.cache/
 /tmp_repos/
+
+# Playwright E2E artifacts
+test-results/
+playwright-report/
+tests/e2e/.last-run.json

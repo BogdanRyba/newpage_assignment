@@ -201,4 +201,12 @@ class IngestService:
 
     async def _progress(self, repo_id: str, job_id: str, **fields) -> None:
         await self.jobs.update(job_id, **fields)
-        await publish(repo_id, {"type": "progress", **fields})
+        # Always stream the latest counts. A partial update (the embedding phase sends only
+        # chunks_done) must not drop files_done from the payload, or the Indexing screen resets
+        # to "0 files" mid-ingest (frontend reads `job.files_done ?? 0`).
+        job = await self.jobs.get(job_id)
+        event = {"type": "progress", **fields}
+        if job is not None:
+            event.setdefault("files_done", job.files_done)
+            event.setdefault("chunks_done", job.chunks_done)
+        await publish(repo_id, event)
