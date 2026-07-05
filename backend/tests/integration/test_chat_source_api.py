@@ -19,10 +19,28 @@ from app.db.session import SessionLocal
 from app.main import app
 from app.services.agent_runner import AgentRunner
 from tests.fakes import make_deps, make_point
+from tests.pdf_fixture import make_pdf
 
 pytestmark = pytest.mark.integration
 
 FILE_CONTENT = "class Calculator:\n    def add(self, v):\n        self.total += v\n"
+
+
+async def _ready_repo_with_pdf() -> tuple[str, bytes]:
+    pdf = make_pdf("Architecture overview")
+    async with SessionLocal() as session:
+        repo = await RepoRepository(session).create(name="pdftest", source_url=None)
+        await RepoRepository(session).set_status(repo.id, "ready")
+        await FileRepository(session).upsert(
+            repo_id=repo.id,
+            path="docs/spec.pdf",
+            lang="text",
+            size=len(pdf),
+            sha256="y" * 64,
+            content="Architecture overview",
+            raw=pdf,
+        )
+    return repo.id, pdf
 
 
 async def _client() -> httpx.AsyncClient:
@@ -103,4 +121,25 @@ async def test_source_missing_file_404() -> None:
     repo_id = await _ready_repo_with_file()
     async with await _client() as client:
         resp = await client.get(f"/repos/{repo_id}/source", params={"path": "nope.py"})
+    assert resp.status_code == 404
+
+
+async def test_source_flags_pdf_with_has_raw_and_serves_bytes() -> None:
+    repo_id, pdf = await _ready_repo_with_pdf()
+    async with await _client() as client:
+        meta = await client.get(f"/repos/{repo_id}/source", params={"path": "docs/spec.pdf"})
+        raw = await client.get(f"/repos/{repo_id}/source/raw", params={"path": "docs/spec.pdf"})
+    # /source exposes the extracted text + a flag telling the UI a visual view is available.
+    assert meta.json()["has_raw"] is True
+    # /source/raw serves the original PDF bytes inline for the iframe viewer.
+    assert raw.status_code == 200
+    assert raw.headers["content-type"] == "application/pdf"
+    assert raw.content == pdf
+
+
+async def test_source_raw_404_for_non_pdf_file() -> None:
+    # A normal source file has no stored bytes, so the visual endpoint refuses it.
+    repo_id = await _ready_repo_with_file()
+    async with await _client() as client:
+        resp = await client.get(f"/repos/{repo_id}/source/raw", params={"path": "calculator.py"})
     assert resp.status_code == 404

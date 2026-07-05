@@ -12,8 +12,9 @@ from dataclasses import dataclass
 from pydantic import BaseModel, ConfigDict
 
 from app.core.config import Settings
-from app.domain.models import Answer, Hit, SparseVector
+from app.domain.models import Answer, FileAuthorship, Hit, SparseVector
 from app.domain.retrieval.context import Source
+from app.ports.authorship import AuthorshipPort
 from app.ports.embedder import Embedder
 from app.ports.generator import Generator
 from app.ports.graph_store import GraphStore
@@ -35,6 +36,11 @@ class QueryState(BaseModel):
     sources: list[Source] = []
     sources_block: str = ""
 
+    # dev-search persona: which files to attribute + their authorship
+    target_paths: list[str] = []
+    authorship: list[FileAuthorship] = []
+    authorship_block: str = ""
+
     draft: str = ""
     best_draft: str = ""  # earliest validly-cited draft, kept as a fallback at exhaustion
     critic_iters: int = 0
@@ -51,3 +57,4 @@ class Deps:
     generator: Generator
     graph_store: GraphStore
     settings: Settings
+    authorship: AuthorshipPort | None = None

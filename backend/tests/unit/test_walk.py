@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.ingestion.walk import MAX_BYTES, walk
+from tests.pdf_fixture import make_pdf
 
 
 def _make_repo(root: Path) -> None:
@@ -46,3 +47,21 @@ def test_walk_populates_hash_and_size(tmp_path: Path) -> None:
 
 def test_empty_repo_yields_nothing(tmp_path: Path) -> None:
     assert list(walk(tmp_path)) == []
+
+
+def test_walk_extracts_pdf_text_and_keeps_raw_bytes(tmp_path: Path) -> None:
+    # PDFs are no longer denied: their text is extracted (so they're chunkable/citable) and
+    # the original bytes are retained so the UI can render the document visually.
+    pdf = make_pdf("Quarterly roadmap and goals")
+    (tmp_path / "doc.pdf").write_bytes(pdf)
+    files = {sf.path: sf for sf in walk(tmp_path)}
+    assert "doc.pdf" in files
+    sf = files["doc.pdf"]
+    assert "roadmap" in sf.text.lower()  # extracted prose, not raw PDF bytes
+    assert sf.raw == pdf  # original bytes retained for the visual viewer
+
+
+def test_walk_skips_pdf_with_no_extractable_text(tmp_path: Path) -> None:
+    # A corrupt / image-only PDF yields no text; indexing its bytes would only pollute retrieval.
+    (tmp_path / "scan.pdf").write_bytes(b"%PDF-1.4\nnot a real pdf body\n%%EOF")
+    assert "scan.pdf" not in {sf.path for sf in walk(tmp_path)}

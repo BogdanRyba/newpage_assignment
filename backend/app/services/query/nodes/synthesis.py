@@ -31,3 +31,33 @@ def generate_node(deps: Deps) -> Node:
         return {"draft": draft.strip()}
 
     return _node
+
+
+def generate_research_node(deps: Deps) -> Node:
+    """Like generate_node but with the research prompt (structural relationships)."""
+    from app.prompts import research
+
+    @instrument("generate")
+    async def _node(state: QueryState) -> dict:
+        user = research.build_user(
+            state.question, state.sources_block, feedback=state.feedback or None
+        )
+        draft = await deps.generator.complete(research.SYSTEM, user)
+        return {"draft": draft.strip()}
+
+    return _node
+
+
+def generate_architect_node(deps: Deps) -> Node:
+    """Like generate_node but with the architect prompt (structure/patterns/design)."""
+    from app.prompts import architect
+
+    @instrument("generate")
+    async def _node(state: QueryState) -> dict:
+        user = architect.build_user(
+            state.question, state.sources_block, feedback=state.feedback or None
+        )
+        draft = await deps.generator.complete(architect.SYSTEM, user)
+        return {"draft": draft.strip()}
+
+    return _node

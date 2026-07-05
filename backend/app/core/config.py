@@ -55,6 +55,27 @@ class Settings(BaseSettings):
     neo4j_auth: str = "neo4j/ariadnegraph"
     graph_augment_top: int = 3  # how many top hits to expand via the graph
 
+    # --- agents (coordinator + specialized personas) ---
+    dev_search_enabled: bool = True  # authorship-backed "who wrote this" persona
+    coordinator_enabled: bool = True  # route questions to a persona; off → plain Daedalus QA
+    router_min_confidence: float = 0.5  # below this, fall back to QA
+
+    # --- orchestrator (Theseus): confidence-gated dynamic tool-calling ---
+    orchestrator_enabled: bool = False  # dark-launch; off → coordinator/Daedalus path unchanged
+    gate_default_threshold: float = 0.6  # min necessity to run an action when no per-type override
+    gate_thresholds: dict[str, float] = {  # per action-type necessity bar (cheap low, costly high)
+        "retrieval": 0.5,
+        "graph_neighbors": 0.55,
+        "authorship_lookup": 0.6,
+        "version_diff": 0.65,
+    }
+    action_budget: int = 6  # max gated actions per run (bounds the ReAct loop)
+    max_intent_revisions: int = 1  # how many times intent may be re-derived on new evidence
+    escalation_threshold: float = 0.7  # crisis prob at/above which we escalate to a human/help
+
+    # --- human-in-the-loop (high-stakes proposals pause for approval) ---
+    hitl_enabled: bool = True  # gate architect proposals on human approval via interrupt()
+
 
 @lru_cache
 def get_settings() -> Settings:

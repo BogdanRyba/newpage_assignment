@@ -39,6 +39,12 @@ class QdrantVectorStore:
             vectors_config={DENSE: qm.VectorParams(size=dense_dim, distance=qm.Distance.COSINE)},
             sparse_vectors_config={SPARSE: qm.SparseVectorParams()},
         )
+        # Indexed so GC can delete a whole blob's points by exact-match filter cheaply.
+        await self._client.create_payload_index(
+            collection_name=name,
+            field_name="blob_sha",
+            field_schema=qm.PayloadSchemaType.KEYWORD,
+        )
 
     async def upsert(self, ctx: RepoContext, points: list[VectorPoint]) -> None:
         if not points:
@@ -85,6 +91,18 @@ class QdrantVectorStore:
             return 0
         res = await self._client.count(ctx.qdrant_collection)
         return res.count
+
+    async def delete_by_blob(self, ctx: RepoContext, blob_sha: str) -> None:
+        if not await self._client.collection_exists(ctx.qdrant_collection):
+            return
+        await self._client.delete(
+            collection_name=ctx.qdrant_collection,
+            points_selector=qm.FilterSelector(
+                filter=qm.Filter(
+                    must=[qm.FieldCondition(key="blob_sha", match=qm.MatchValue(value=blob_sha))]
+                )
+            ),
+        )
 
     async def delete_collection(self, ctx: RepoContext) -> None:
         if await self._client.collection_exists(ctx.qdrant_collection):

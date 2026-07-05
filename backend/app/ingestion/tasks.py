@@ -56,8 +56,11 @@ async def ingest_repo(
     source_url: str | None = None,
     local_path: str | None = None,
     has_upload: bool = False,
+    ref: str | None = None,
+    parent_version_id: str | None = None,
 ) -> None:
-    """Run the full ingest pipeline for a repo. Idempotent (uuid5 point IDs)."""
+    """Ingest one version of a repo. Incremental when a parent version is given (only
+    changed blobs re-embedded); content-addressed point IDs make it idempotent."""
     from app.core.uploads import pop_upload
     from app.db.session import SessionLocal
     from app.services.ingest_service import IngestService
@@ -70,4 +73,6 @@ async def ingest_repo(
             source_url=source_url,
             zip_bytes=zip_bytes,
             local_path=local_path,
+            ref=ref,
+            parent_version_id=parent_version_id,
         )

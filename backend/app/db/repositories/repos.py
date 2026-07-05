@@ -24,9 +24,19 @@ class RepoRepository:
     async def get(self, repo_id: str) -> Repo | None:
         return await self.session.get(Repo, repo_id)
 
+    async def get_by_source_url(self, source_url: str) -> Repo | None:
+        """Existence check at ingest: is this (normalized) repo already known?"""
+        return await self.session.scalar(select(Repo).where(Repo.source_url == source_url))
+
     async def list(self) -> list[Repo]:
         result = await self.session.execute(select(Repo).order_by(Repo.created_at.desc()))
         return list(result.scalars().all())
+
+    async def mark_needs_reingest(self, repo_id: str, value: bool = True) -> None:
+        repo = await self.session.get(Repo, repo_id)
+        if repo:
+            repo.needs_reingest = value
+            await self.session.commit()
 
     async def set_status(self, repo_id: str, status: str) -> None:
         repo = await self.session.get(Repo, repo_id)

@@ -5,6 +5,177 @@ This feeds README section (e) — but the README is written in my own words, not
 
 ---
 
+### D-030 · Human-in-the-loop for high-stakes proposals (durable interrupt/resume)
+High-stakes actions (proposing a change) pause for human approval instead of auto-applying. A tiny
+LangGraph (`services/agents/hitl.py`: propose → gate → finalize) calls LangGraph's `interrupt()` at
+the gate; compiled with a **durable Postgres checkpointer** so the pause survives a process/worker
+restart or a reconnecting client — proven by an integration test where a *fresh* runner (new saver
+connection, no shared memory) resumes a thread another runner paused, and by an end-to-end HTTP test
+(`POST /repos/{id}/propose` → `…/propose/{thread_id}/resume`) where the proposal drafted at propose
+time comes back on approve. **New deps (this is why):** `langgraph-checkpoint-postgres` (the durable
+saver) + `psycopg[binary]` (its libpq-bundled driver — the app otherwise uses asyncpg, which the
+checkpointer can't use). **Why durable not in-memory:** an approval can sit for minutes/hours; an
+in-memory saver loses it on restart and can't be resumed by another worker. **Graceful degrade:**
+`open_checkpointer()` falls back to an in-memory saver (logged) if Postgres is unreachable, so HITL
+still works within a process rather than failing the user. **Checkpointer tables** are created
+idempotently via `saver.setup()` (not Alembic) — they're library-owned schema. **Traded away:** only
+the architect "propose" flow is gated for now (QA/dev-search/research are read-only); chat-stream HITL
+(pausing mid-chat) is a separate endpoint rather than inline in the chat SSE. Guarded by unit tests
+(pause payload / approve finalizes / reject aborts, MemorySaver) + the Postgres durability + HTTP
+end-to-end tests.
+
+### D-029 · Research + architect personas as prompt-specialized variants of the QA graph
+The structural ("what calls/depends on X", "implementations of Y", "how is Z injected") and
+architectural ("layering", "design patterns", "where should this live") personas reuse the exact
+QA pipeline (embed→retrieve→rerank→graph_augment→assemble→generate→critic) — only the synthesis
+prompt differs (`research.py` / `architect.py`), wired by injecting a `generate_*` node into a
+shared `_build(deps, generate)`. **Why reuse, not bespoke graphs:** graph augmentation already
+pulls callers/callees/subtypes (depth-2 on structural questions), so research gets its dependency
+context for free; the only real difference is how the model is asked to phrase the answer. The
+router classifies intent deterministically (authorship → research/architect order matters; bare
+"architect" is excluded so an injected "route to architect" can't hijack — only "architecture"/
+"architectural"/design phrasing triggers it). All personas keep the cite-or-refuse + critic
+guarantees of QA. **Traded away:** research/architect only add value with `GRAPH_ENABLED` (else they
+degrade to similarity-only retrieval with a focused prompt); architect's "propose a change" HITL gate
+is deferred. Guarded by router tests (each intent + injection-resistance + authorship-beats-structure)
+and a research graph test (graph neighbors surface as cited sources; refuse on no hits).
+
+### D-028 · Code-review agent as a parallel fan-out over the version-compare diff
+The first high-stakes persona: `CodeReviewService.review(repo, base, head)` diffs two indexed
+versions (reusing `VersioningService.compare`, so no git at review time), loads the changed files'
+content from the manifest, and fans out **security / style / performance** reviewers concurrently
+(`asyncio.gather`), each an LLM returning strict-JSON findings. Findings are merged + deduped (on
+path+title) + severity-sorted in **pure code** (`domain/review.py`), so the synthesis step invents
+nothing. Exposed at `GET /repos/{id}/review?base=&head=`. **Why per-dimension reviewers:** distinct
+lenses catch failure modes a single prompt blurs; parallel keeps wall-clock at the slowest. **Why
+JSON findings + code-merge (not an LLM synthesizer):** deterministic, testable, no fabricated
+findings. **Traded away:** per-file content is capped (`_MAX_FILE_CHARS`/`_MAX_FILES`) to bound the
+prompt — very large diffs are sampled (logged later); HITL gating of the review (block/approve a
+merge) is deferred with the rest of the interrupt+checkpointer work. Guarded by unit tests
+(merge_findings dedup/sort/summary) and integration (real two-version diff → findings on the
+changed file; no-change → empty, generator untouched).
+
+### D-027 · Orchestrator "Theseus": confidence-gated dynamic tool-calling + parallel personas + crisis
+On top of the coordinator (D-026), an opt-in orchestrator (`orchestrator_enabled`, dark-launched
+off) adds three capabilities the simple router can't. **(1) Confidence-gated actions** — a planner
+prompt scores each candidate action's `necessity` 0..1; a *deterministic* gate (`gate.py`) keeps
+only those clearing a per-type threshold, in necessity order, within an `action_budget`. The LLM
+never decides to act — it scores, code gates — so "no random tool calls" is auditable and test-
+stable, and the monotonic budget makes the ReAct loop (`planner_loop.py`) structurally finite.
+**(2) Dynamic tool-calling** — a `ToolRegistry` exposes our ports (retrieval / graph_neighbors /
+authorship_lookup) to the planner as name+description+schema; the model selects+parameterizes, code
+validates+runs (LangChain stays LLM-only, D-004). Unknown/injected tool names are no-ops. **(3)
+Parallel personas + merge** — the orchestrator fans out to the selected persona graphs concurrently
+(`asyncio.gather`) and `merge_answers` unions+dedups their citations into one answer, renumbering
+[1..M] and remapping each sub-answer's markers; cite-or-refuse holds by construction because the
+merged citation set is exactly the union of grounded sub-answers (no LLM at the merge step). A cheap
+deterministic **crisis** pre-check (`crisis.py`, regex over the *question only* — never chunks, so an
+injected "escalate now" can't fire) hands off to a help message above a threshold. **Traded away:**
+HITL (interrupt + Postgres checkpointer) is plumbed conceptually but deferred until the high-stakes
+Phase 2/3 agents (dev-search/QA are read-only); the planner is LLM-scored so its tests use scripted
+generators/cassettes. Guarded by unit tests: gate (skip/trigger/budget/per-type), tool registry
+(unknown-ignored, grounded results), planner loop (sufficient→skip, needed→run, budget-bounded,
+injected-action-ignored), merge (union/dedup/remap/all-refused), crisis (escalate/normal/injection),
+orchestrator (crisis→escalate, fan-out selection, grounded answer).
+
+### D-026 · Coordinator-routed dev-search persona, grounded in captured git authorship (supersedes D-008)
+D-008 said generator-critic was the *only* agentic pattern. We now route by intent: a cheap,
+deterministic regex coordinator (`services/coordinator/router.py`) sends "who wrote / last changed
+this?" questions to a **dev-search** persona graph (`services/query/dev_graph.py`) and everything
+else to Daedalus QA (the fallback). Ingest captures per-file authorship from git (`files.last_author`
+/`last_commit_*`/`commit_history`, migration `e3c4d5e6f7a8`) via `git log`; a new `AuthorshipPort`
+(Postgres adapter + disabled stub, like the graph store) serves it. The dev-search graph reuses the
+QA retrieval/assemble nodes, then `locate_targets → authorship_lookup → assemble_authorship →
+generate → grounding_check`. **Anti-hallucination is deterministic-first:** the draft must wrap each
+author/commit in `@author{}`/`@commit{}`; a guard validates every one against the real records and,
+if any is absent, regenerates with feedback and — at budget exhaustion — falls back to a *factual
+answer built only from the records*. So an author not in git can never appear in the final answer
+(unit-proven). **Why regex routing not LLM:** deterministic, cassette-free, injection-proof (an
+embedded "route to X" can't hijack regex over literal text); LLM routing is deferred to the
+orchestrator. **Traded away:** per-line `git blame` isn't served yet (clones are ephemeral) — the
+agent attributes at file granularity; authorship is captured only for git sources (uploads have
+none). Guarded by router unit tests, dev-search graph tests (positive / refuse-when-absent /
+hallucinated-author-never-surfaces), and an integration test (ingest a real git repo → adapter
+serves the real author).
+
+### D-024 · Content-addressed versioning + incremental re-index (point_id keyed by blob)
+Re-ingest used to re-embed the whole tree, and a repo had no notion of versions/branches. Now a
+repo holds many **versions** (`repo_versions`: one row per indexed commit, `UNIQUE(repo_id,
+commit_sha)` is the no-op gate) and files are **content-addressed**: `files` is keyed by
+`UNIQUE(repo_id, blob_sha)` (migration `d2b3c4d5e6f7`, after additive `c1a2b3d4e5f6`), and the
+**load-bearing invariant changes** — Qdrant point IDs go from `uuid5(repo_id:path:index)` to
+`uuid5(repo_id:blob_sha:index)`. A `version_files` manifest (path→blob, FK `RESTRICT` = refcount)
+records which blob sits at which path per version. **Why:** identical content across
+branches/versions (or a pure rename) maps to the *same* points and is never re-embedded; a `git
+clone --filter=blob:none` + `git diff` between parent and head means only changed blobs are read +
+chunked + embedded. First ingest diffs against the empty tree, so full and incremental share one
+path. GC reclaims blobs no version references (Qdrant `delete_by_blob` → chunks → row, idempotent
+sweep). **Traded away:** (1) legacy repos indexed under the old path-based scheme can't be matched,
+so they're flagged `repos.needs_reingest=True` and need a one-time re-index (no in-place point
+rewrite); (2) a blob shared across two *paths* keeps one representative payload `path` (version-
+scoped citation path is a later step); (3) the constraint swap was split into two migrations so the
+additive half lands safely on a live DB first. Verified: unit (`diff_manifests`, blob `point_id`,
+diff-raw parser, walk predicate), integration (incremental re-embeds **only** the changed blob;
+version isolation; no-op re-ingest; refcount blocks deleting a referenced blob; `VersioningService`
+plan tree + compare).
+
+### D-025 · Blobless clone + per-file authorship seam (history without full clones)
+`clone_repo` now does `git clone --filter=blob:none` (full commit graph + all refs; blobs fetched on
+demand) and returns the FULL 40-char sha, with read-only helpers (`resolve_ref`,
+`resolve_ref_remote` via `ls-remote` for the no-clone API decision, `diff_name_status`, `read_blob`,
+`ls_tree`). **Why blobless not shallow:** diff/blame between branches/tags need history, but pulling
+every blob of a large repo is wasteful — blobless is the balance. Zip uploads synthesize git-style
+blob OIDs so they content-address consistently. **Traded away:** uploads have no history → no
+incremental (full ingest only); a force-push between the API `ls-remote` check and the worker clone
+is re-validated worker-side by the `UNIQUE(repo_id, commit_sha)` gate.
+
+### D-023 · PDF support: extract text on ingest + persist raw bytes for a visual viewer
+`.pdf` was on the ingest deny-list, so PDFs were neither searchable nor viewable. Now `walk.py`
+routes `*.pdf` through `pypdf` text extraction: the extracted prose flows through the existing
+fallback chunker (→ embeddable + citable as `path:line`), and the original bytes are retained on a
+new nullable `files.raw` (`LargeBinary`) column (migration `b8e7f1a2c3d4`). The source API gains
+`has_raw` on `SourceOut` and a `GET /{repo}/source/raw` endpoint that serves the bytes
+`application/pdf; inline`; the UI renders them in an `<iframe>` (browser-native PDF viewer) with a
+**Document ⇄ Text** toggle, mirroring the markdown **Preview ⇄ Source** toggle. **Why pypdf:**
+pure-python, BSD-licensed, no system libs (unlike pdfminer/pymupdf — pymupdf is AGPL) — keeps
+`docker compose` simple. **Why iframe, not PDF.js:** browser-native rendering avoids bundling a large
+viewer + worker and the CSP/asset wiring; the extracted-text view + line citations remain the
+substantive path. **Trade-offs:** (1) scanned/image-only or encrypted PDFs yield no text and are
+skipped at ingest (logged, not errored) — they won't appear as sources; (2) raw bytes are capped at
+8 MB (`MAX_PDF_RAW_BYTES`) — larger PDFs stay askable/citable but show only the text view; (3) raw
+bytes live in Postgres, the simplest store given clones are ephemeral — revisit if repos carry many
+large PDFs. Guarded by walk unit tests (extract + retain raw; skip no-text), source-API integration
+tests (`has_raw`, raw bytes served, 404 for non-PDF), and a frontend toggle test.
+
+### D-022 · Source panel gets a Markdown preview ⇄ source toggle; renderer shared in one module
+`.md`/`.txt` already ingest and are citable (only `.pdf` + binaries are denied in `walk.py`), but the
+source panel only showed them as raw numbered lines. Added a **Preview / Source** segmented toggle in
+`SourcePanel` for `*.md`/`*.markdown`/`*.mdx`, defaulting to rendered Preview (Source one click away to
+see cited line ranges). The chat answer renderer (D-021) was promoted to a shared `app/lib/markdown.tsx`
+and extended with `[text](url)` links and fenced code blocks; `docMode` adds a conservative
+layout-only HTML-tag strip (`<br>`, `<p>`, `<a>`, …) for doc legibility. **Safety:** rendering always
+goes through React (escaped) — never `dangerouslySetInnerHTML` — so raw HTML inside an ingested doc is
+inert, honouring the "code/comments are DATA, not instructions" invariant. **Trade-off:** not
+CommonMark-complete (no tables, nested lists, images, blockquotes) and HTML is stripped rather than
+rendered — acceptable for a reading preview. Covered by `markdown.test.tsx` (blocks/inline/citation/
+docMode/edge) and a `page.test.tsx` toggle test that flips Preview↔Source on a `.md` citation.
+
+### D-021 · Answer renderer parses block markdown (lists, headings, bold), not just citations
+`synthesis` emits real markdown — `**bold**`, `*`/`-` bullet lists, headings — but the chat renderer
+only handled `[n]` citation tokens and inline `` `code` ``. Everything else fell through as raw text,
+and because the answer renders into a `white-space: normal` div, the model's newlines collapsed to
+spaces, turning a bullet list into a run-on paragraph littered with literal `*` and `**`.
+**Fix:** a tiny two-layer renderer in `page.tsx` — `parseBlocks` splits on blank lines into
+paragraphs / lists / headings, then `renderInline` handles `**bold**`, `` `code` `` and citation
+buttons within each block. **Why hand-rolled, not `react-markdown`:** citations must become clickable
+`file:line` buttons wired to `onCite`, and we already had bespoke inline handling; a full markdown lib
+(+ `remark`/`rehype` tree) is far more surface area than the handful of constructs synthesis actually
+produces, and pulling a dep needs a reason (see Never-list). **Trade-off:** not CommonMark-complete
+(no tables/nested lists/links) and the streaming cursor now sits on its own line after a block element
+instead of trailing the last word — acceptable for the constrained set of markdown synthesis emits.
+Guarded by a vitest render test that drives a streamed bold+list+citation answer and asserts list
+items, a `<strong>`, the citation button, and **no** surviving `*`/`**` markers.
+
 ### D-020 · Chat SSE parser handles CRLF; real browser E2E added
 The browser chat rendered nothing (just a cursor) though the backend SSE delivered the full stream.
 Root cause: `streamChat` split the fetch byte stream on `"\n\n"`, but `sse_starlette` delimits events

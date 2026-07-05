@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from app.adapters.authorship.postgres import PostgresAuthorship
+from app.adapters.authorship.stub import StubAuthorship
 from app.adapters.embedding.gemini import GeminiEmbedder
 from app.adapters.embedding.sparse_fastembed import FastEmbedSparse
 from app.adapters.embedding.voyage import VoyageEmbedder
@@ -16,6 +18,7 @@ from app.adapters.llm.gemini import GeminiGenerator
 from app.adapters.parsing.tree_sitter import TreeSitterParser
 from app.adapters.vector.qdrant import QdrantVectorStore
 from app.core.config import get_settings
+from app.ports.authorship import AuthorshipPort
 from app.ports.embedder import Embedder
 from app.ports.generator import Generator
 from app.ports.graph_store import GraphStore
@@ -66,3 +69,10 @@ def make_graph_store() -> GraphStore:
 @lru_cache
 def make_generator() -> Generator:
     return GeminiGenerator()
+
+
+@lru_cache
+def make_authorship() -> AuthorshipPort:
+    if get_settings().dev_search_enabled:
+        return PostgresAuthorship()
+    return StubAuthorship()

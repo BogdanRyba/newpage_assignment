@@ -30,6 +30,7 @@ def _to_hit(repo_id: str, sp: ScoredPoint, source: str) -> Hit:
     chunk = Chunk(
         repo_id=repo_id,
         path=p["path"],
+        blob_sha=p.get("blob_sha", ""),
         lang=p.get("lang", "text"),
         symbol=p.get("symbol"),
         kind=p.get("kind", "block"),

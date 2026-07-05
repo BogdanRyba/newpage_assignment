@@ -8,11 +8,15 @@ once and hashed so a later run can re-index only what changed.
 from __future__ import annotations
 
 import hashlib
+import io
 from collections.abc import Iterator
 from pathlib import Path
 
+import structlog
 from pathspec import PathSpec
 from pydantic import BaseModel
+
+log = structlog.get_logger(__name__)
 
 DENY_DIRS = {
     ".git",
@@ -33,7 +37,6 @@ DENY_EXT = {
     ".gif",
     ".svg",
     ".ico",
-    ".pdf",
     ".zip",
     ".gz",
     ".tar",
@@ -49,6 +52,10 @@ DENY_EXT = {
     ".lockb",
 }
 MAX_BYTES = 512_000
+# Raw PDF bytes are persisted so the UI can render the real document; cap to keep the
+# files table lean. Larger PDFs still get text-extracted (askable + citable), just no
+# visual view (raw=None) — the panel falls back to the extracted-text view.
+MAX_PDF_RAW_BYTES = 8_000_000
 
 
 class SourceFile(BaseModel):
@@ -56,6 +63,7 @@ class SourceFile(BaseModel):
     text: str
     sha256: str
     size: int
+    raw: bytes | None = None  # original bytes, only for PDFs we can render visually
 
 
 def load_gitignore(root: Path) -> PathSpec:
@@ -72,23 +80,69 @@ def walk(root: Path) -> Iterator[SourceFile]:
         if not path.is_file():
             continue
         rel = path.relative_to(root).as_posix()
-        if _denied(rel, path) or gitignore.match_file(rel):
+        if path_denied(rel) or gitignore.match_file(rel):
             continue
-        data = path.read_bytes()
-        if len(data) > MAX_BYTES or _looks_binary(data):
-            continue
-        yield SourceFile(
-            path=rel,
-            text=data.decode("utf-8", "ignore"),
-            sha256=hashlib.sha256(data).hexdigest(),
-            size=len(data),
-        )
+        sf = source_file_from_bytes(rel, path.read_bytes())
+        if sf is not None:
+            yield sf
 
 
-def _denied(rel: str, path: Path) -> bool:
-    if set(Path(rel).parts) & DENY_DIRS:
+def source_file_from_bytes(rel: str, data: bytes) -> SourceFile | None:
+    """Build a SourceFile from a path + raw bytes, or None if it should be skipped.
+
+    Shared by the filesystem walk and the git-incremental path (which feeds blob bytes
+    here), so deny rules — binary, oversize, image-only PDF — are decided in one place.
+    Caller is responsible for the path-level deny-list / .gitignore check first.
+    """
+    if rel.lower().endswith(".pdf"):
+        return _read_pdf(rel, data)
+    if len(data) > MAX_BYTES or _looks_binary(data):
+        return None
+    return SourceFile(
+        path=rel,
+        text=data.decode("utf-8", "ignore"),
+        sha256=hashlib.sha256(data).hexdigest(),
+        size=len(data),
+    )
+
+
+def path_denied(rel: str) -> bool:
+    """Path-only deny check (no filesystem access): vendored dirs + binary extensions."""
+    parts = Path(rel).parts
+    if set(parts) & DENY_DIRS:
         return True
-    return path.suffix.lower() in DENY_EXT
+    return Path(rel).suffix.lower() in DENY_EXT
+
+
+def _read_pdf(rel: str, data: bytes) -> SourceFile | None:
+    """Extract a PDF's text so it can be chunked/cited, and keep the raw bytes for the viewer.
+
+    Returns None for PDFs we can't extract text from (encrypted, corrupt, or scanned/image-only):
+    indexing image bytes as if they were prose would only pollute retrieval.
+    """
+    text = _extract_pdf_text(data)
+    if not text.strip():
+        log.info("pdf.skip_no_text", path=rel, size=len(data))
+        return None
+    return SourceFile(
+        path=rel,
+        text=text,
+        sha256=hashlib.sha256(data).hexdigest(),
+        size=len(data),
+        raw=data if len(data) <= MAX_PDF_RAW_BYTES else None,
+    )
+
+
+def _extract_pdf_text(data: bytes) -> str:
+    from pypdf import PdfReader
+    from pypdf.errors import PyPdfError
+
+    try:
+        reader = PdfReader(io.BytesIO(data))
+        return "\n\n".join((page.extract_text() or "") for page in reader.pages)
+    except (PyPdfError, ValueError, OSError) as exc:  # malformed / encrypted / truncated
+        log.warning("pdf.extract_failed", error=str(exc))
+        return ""
 
 
 def _looks_binary(data: bytes) -> bool:

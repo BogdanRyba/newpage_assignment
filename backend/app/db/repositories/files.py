@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Chunk, File
+from app.db.models import Chunk, File, VersionFile
 
 
 class FileRepository:
@@ -13,32 +13,148 @@ class FileRepository:
         self.session = session
 
     async def upsert(
-        self, *, repo_id: str, path: str, lang: str, size: int, sha256: str, content: str
+        self,
+        *,
+        repo_id: str,
+        path: str,
+        lang: str,
+        size: int,
+        sha256: str,
+        content: str,
+        raw: bytes | None = None,
+        blob_sha: str | None = None,
     ) -> File:
         existing = await self.session.scalar(
             select(File).where(File.repo_id == repo_id, File.path == path)
         )
         if existing:
-            existing.lang, existing.size, existing.sha256, existing.content = (
-                lang,
-                size,
-                sha256,
-                content,
-            )
+            existing.lang = lang
+            existing.size = size
+            existing.sha256 = sha256
+            existing.content = content
+            existing.raw = raw
+            existing.blob_sha = blob_sha if blob_sha is not None else sha256
             file = existing
         else:
             file = File(
-                repo_id=repo_id, path=path, lang=lang, size=size, sha256=sha256, content=content
+                repo_id=repo_id,
+                path=path,
+                lang=lang,
+                size=size,
+                sha256=sha256,
+                content=content,
+                raw=raw,
+                blob_sha=blob_sha if blob_sha is not None else sha256,
             )
             self.session.add(file)
         await self.session.commit()
         await self.session.refresh(file)
         return file
 
-    async def get_by_path(self, repo_id: str, path: str) -> File | None:
-        return await self.session.scalar(
-            select(File).where(File.repo_id == repo_id, File.path == path)
+    async def get_or_create_blob(
+        self,
+        *,
+        repo_id: str,
+        blob_sha: str,
+        path: str,
+        lang: str,
+        size: int,
+        sha256: str,
+        content: str,
+        raw: bytes | None = None,
+    ) -> tuple[File, bool]:
+        """Content-addressed file creation: one immutable row per (repo, blob).
+
+        Returns (file, created). When the blob already exists (shared across versions or
+        paths) the existing row is returned with created=False so the caller can skip
+        re-chunking/re-embedding — the heart of "never re-index unchanged content".
+        Rows are never mutated: a changed file is a NEW blob → a NEW row, leaving older
+        versions pointing at the old blob intact.
+        """
+        existing = await self.session.scalar(
+            select(File).where(File.repo_id == repo_id, File.blob_sha == blob_sha)
         )
+        if existing is not None:
+            return existing, False
+        file = File(
+            repo_id=repo_id,
+            path=path,
+            blob_sha=blob_sha,
+            lang=lang,
+            size=size,
+            sha256=sha256,
+            content=content,
+            raw=raw,
+        )
+        self.session.add(file)
+        await self.session.commit()
+        await self.session.refresh(file)
+        return file, True
+
+    async def set_authorship(
+        self,
+        file_id: str,
+        *,
+        last_author: str,
+        last_author_email: str,
+        last_commit_sha: str,
+        last_commit_at: str,
+        commit_history: list[dict],
+    ) -> None:
+        """Store git authorship for a file row (called at ingest for git sources)."""
+        f = await self.session.get(File, file_id)
+        if f is not None:
+            f.last_author = last_author
+            f.last_author_email = last_author_email
+            f.last_commit_sha = last_commit_sha
+            f.last_commit_at = last_commit_at
+            f.commit_history = commit_history
+            await self.session.commit()
+
+    async def get_by_path(self, repo_id: str, path: str) -> File | None:
+        # NOTE: under versioning a path can have multiple blobs (rows). This returns one
+        # of them (latest by row order); version-scoped source lookup is a later step.
+        return await self.session.scalar(
+            select(File).where(File.repo_id == repo_id, File.path == path).order_by(File.id.desc())
+        )
+
+    async def files_by_author(self, repo_id: str, author: str) -> list[File]:
+        """Files this developer last changed (case-insensitive substring) — for dev search.
+
+        Deduped by path (a path can have several blob rows across versions), keeping the most
+        recently created row per path.
+        """
+        rows = await self.session.execute(
+            select(File)
+            .where(File.repo_id == repo_id, File.last_author.ilike(f"%{author}%"))
+            .order_by(File.path, File.id.desc())
+        )
+        seen: set[str] = set()
+        out: list[File] = []
+        for f in rows.scalars().all():
+            if f.path in seen:
+                continue
+            seen.add(f.path)
+            out.append(f)
+        return out
+
+    async def orphan_blobs(self, repo_id: str) -> list[tuple[str, str | None]]:
+        """(file_id, blob_sha) for blobs no version references — GC candidates.
+
+        A blob orphans only once every version that contained it is gone (the version_files
+        FK RESTRICT enforces this), so this is safe to run after any ingest/version drop.
+        """
+        rows = await self.session.execute(
+            select(File.id, File.blob_sha)
+            .outerjoin(VersionFile, VersionFile.file_id == File.id)
+            .where(File.repo_id == repo_id, VersionFile.file_id.is_(None))
+        )
+        return [(fid, blob) for fid, blob in rows.all()]
+
+    async def delete(self, file_id: str) -> None:
+        """Delete a file row (its chunks cascade). Caller deletes Qdrant points first."""
+        await self.session.execute(delete(File).where(File.id == file_id))
+        await self.session.commit()
 
     async def symbol_map(
         self, repo_id: str, file_cap: int = 40, sym_cap: int = 12

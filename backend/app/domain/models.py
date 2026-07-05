@@ -54,6 +54,7 @@ class Chunk(BaseModel):
 
     repo_id: str
     path: str
+    blob_sha: str = ""  # git blob OID — the content address; identical content shares it
     lang: str
     symbol: str | None
     kind: str
@@ -70,8 +71,12 @@ class Chunk(BaseModel):
 
     @property
     def point_id(self) -> str:
-        """Deterministic id → re-ingestion upserts in place, never duplicates."""
-        return point_id(self.repo_id, self.path, self.index)
+        """Deterministic id → re-ingestion upserts in place, never duplicates.
+
+        Keyed by blob content (not path), so identical content across branches/versions
+        — or moved to a new path — maps to the SAME points and is never re-embedded.
+        """
+        return point_id(self.repo_id, self.blob_sha, self.index)
 
 
 class Hit(BaseModel):
@@ -99,9 +104,49 @@ class Answer(BaseModel):
     refusal_reason: str | None = None
 
 
-def point_id(repo_id: str, path: str, index: int) -> str:
-    """uuid5(repo_id:path:index) — stable across runs → idempotent upserts."""
-    return str(uuid5(NAMESPACE_URL, f"{repo_id}:{path}:{index}"))
+def point_id(repo_id: str, blob_sha: str, index: int) -> str:
+    """uuid5(repo_id:blob_sha:index) — content-addressed → idempotent + shared.
+
+    Unchanged blobs across versions/branches reuse the same id (never re-embedded);
+    a re-ingest of identical content upserts in place. ``repo_id`` keeps it scoped so
+    no point can leak across repos.
+    """
+    return str(uuid5(NAMESPACE_URL, f"{repo_id}:{blob_sha}:{index}"))
+
+
+class CommitRef(BaseModel, frozen=True):
+    """One commit that touched a file — the unit of authorship history.
+
+    Author/email/subject are attacker-controllable repo data: sanitize + fence before they
+    reach any prompt, and attribute only to values present in these structured records.
+    """
+
+    sha: str
+    author: str
+    email: str = ""
+    committed_at: str = ""  # ISO-8601
+    subject: str = ""
+
+
+class FileAuthorship(BaseModel, frozen=True):
+    """Who last changed a file + its recent commit history (the dev-search answer unit)."""
+
+    path: str
+    last_author: str
+    last_author_email: str = ""
+    last_commit_sha: str = ""
+    last_commit_at: str = ""
+    recent_commits: list[CommitRef] = Field(default_factory=list)
+
+
+class BlameSpan(BaseModel, frozen=True):
+    """Authorship of a contiguous line range (on-demand `git blame`)."""
+
+    start_line: int
+    end_line: int
+    author: str
+    commit_sha: str = ""
+    committed_at: str = ""
 
 
 class SparseVector(BaseModel):

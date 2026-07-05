@@ -19,7 +19,9 @@ def with_context(path: str, symbol: str | None, code: str) -> str:
     return f"{header}\n{code}"
 
 
-def chunk_file(repo_id: str, path: str, source: str, parser: Parser) -> list[Chunk]:
+def chunk_file(
+    repo_id: str, path: str, source: str, parser: Parser, blob_sha: str = ""
+) -> list[Chunk]:
     if not source.strip():
         return []
 
@@ -28,9 +30,16 @@ def chunk_file(repo_id: str, path: str, source: str, parser: Parser) -> list[Chu
     if parser.supports(path):
         spans = parser.parse_symbols(path, source)
         if spans:
-            return _chunk_symbols(repo_id, path, lang, source, spans)
+            chunks = _chunk_symbols(repo_id, path, lang, source, spans)
+        else:
+            chunks = _fallback(repo_id, path, lang, source)
+    else:
+        chunks = _fallback(repo_id, path, lang, source)
 
-    return _fallback(repo_id, path, lang, source)
+    # All chunks of a file share its blob (the content address feeding point_id).
+    for c in chunks:
+        c.blob_sha = blob_sha
+    return chunks
 
 
 def _chunk_symbols(

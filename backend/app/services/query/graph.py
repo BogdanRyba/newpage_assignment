@@ -17,7 +17,12 @@ from app.services.query.nodes.retrieval import (
     rerank_node,
     retrieve_node,
 )
-from app.services.query.nodes.synthesis import assemble_node, generate_node
+from app.services.query.nodes.synthesis import (
+    assemble_node,
+    generate_architect_node,
+    generate_node,
+    generate_research_node,
+)
 from app.services.query.state import Deps, QueryState
 
 
@@ -29,7 +34,25 @@ def _after_critic(state: QueryState) -> str:
     return "end" if state.answer is not None else "generate"
 
 
+def build_research_graph(deps: Deps):  # noqa: ANN201 — compiled LangGraph
+    """The research persona: identical pipeline to QA but with the structural research prompt.
+
+    Graph augmentation (callers/callees/subtypes) is the same node — research questions match its
+    structural regex and pull depth-2 neighbors, so dependencies/polymorphism surface as sources.
+    """
+    return _build(deps, generate_research_node(deps))
+
+
+def build_architect_graph(deps: Deps):  # noqa: ANN201 — compiled LangGraph
+    """The architect persona: same pipeline, architecture-focused synthesis prompt."""
+    return _build(deps, generate_architect_node(deps))
+
+
 def build_graph(deps: Deps):  # noqa: ANN201 — returns a compiled LangGraph
+    return _build(deps, generate_node(deps))
+
+
+def _build(deps: Deps, generate):  # noqa: ANN001, ANN201 — generate node injected
     g = StateGraph(QueryState)
     nodes = {
         "embed": embed_node(deps),
@@ -37,7 +60,7 @@ def build_graph(deps: Deps):  # noqa: ANN201 — returns a compiled LangGraph
         "rerank": rerank_node(deps),
         "graph_augment": graph_augment_node(deps),
         "assemble": assemble_node(deps),
-        "generate": generate_node(deps),
+        "generate": generate,
         "critic": critic_node(deps),
         "scope_refuse": scope_refuse_node(deps),
     }

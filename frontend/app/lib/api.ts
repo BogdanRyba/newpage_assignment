@@ -11,6 +11,28 @@ export interface RepoOut {
   commit_sha: string | null;
   file_count: number;
   chunk_count: number;
+  needs_reingest?: boolean;
+}
+
+export interface VersionOut {
+  id: string;
+  ref_name: string;
+  ref_type: string;
+  commit_sha: string;
+  status: string;
+  file_count: number;
+  chunk_count: number;
+}
+
+export interface FileChangeOut {
+  path: string;
+  status: string;
+}
+
+export interface CompareOut {
+  added: FileChangeOut[];
+  removed: FileChangeOut[];
+  modified: FileChangeOut[];
 }
 
 export interface JobOut {
@@ -42,6 +64,13 @@ export interface SourceOut {
   highlight_start: number | null;
   highlight_end: number | null;
   lines: SourceLine[];
+  has_raw?: boolean;
+}
+
+// Direct URL to the original document bytes (PDF) for the visual viewer — loaded by the
+// browser in an iframe, so it must be a plain GET URL, not a fetch.
+export function sourceRawUrl(id: string, path: string): string {
+  return `${API_BASE}/repos/${id}/source/raw?path=${encodeURIComponent(path)}`;
 }
 
 export interface Citation {
@@ -61,13 +90,51 @@ async function jsonOrThrow<T>(resp: Response): Promise<T> {
   return resp.json() as Promise<T>;
 }
 
-export async function createRepo(sourceUrl: string): Promise<IngestStarted> {
+export async function createRepo(sourceUrl: string, ref?: string): Promise<IngestStarted> {
   const resp = await fetch(`${API_BASE}/repos`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ source_url: sourceUrl }),
+    body: JSON.stringify({ source_url: sourceUrl, ref: ref ?? null }),
   });
   return jsonOrThrow<IngestStarted>(resp);
+}
+
+// List a repo's indexed versions (branches/tags/commits), newest first.
+export async function listVersions(id: string): Promise<VersionOut[]> {
+  return jsonOrThrow(await fetch(`${API_BASE}/repos/${id}/versions`));
+}
+
+// Pull a ref's latest tip and incrementally re-index only what changed.
+export async function updateRepo(id: string, ref?: string): Promise<IngestStarted> {
+  const resp = await fetch(`${API_BASE}/repos/${id}/update`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ref: ref ?? null }),
+  });
+  return jsonOrThrow<IngestStarted>(resp);
+}
+
+// Diff two indexed versions (by commit sha or ref name).
+export async function compareVersions(
+  id: string,
+  base: string,
+  head: string,
+): Promise<CompareOut> {
+  const q = new URLSearchParams({ base, head });
+  return jsonOrThrow(await fetch(`${API_BASE}/repos/${id}/compare?${q.toString()}`));
+}
+
+export interface AuthoredFile {
+  path: string;
+  last_author: string | null;
+  last_commit_sha: string | null;
+  last_commit_at: string | null;
+}
+
+// Developer view: files a developer (partial name) last changed.
+export async function searchDeveloper(id: string, author: string): Promise<AuthoredFile[]> {
+  const q = new URLSearchParams({ author });
+  return jsonOrThrow(await fetch(`${API_BASE}/repos/${id}/authored?${q.toString()}`));
 }
 
 export async function getRepo(id: string): Promise<{ repo: RepoOut; job: JobOut | null }> {
@@ -108,6 +175,10 @@ export function streamIngest(
 
 export type ChatEvent =
   | { type: "session"; session_id: string }
+  | { type: "route"; persona: string }
+  | { type: "persona_active"; persona: string }
+  | { type: "persona_done"; persona: string }
+  | { type: "escalation"; mode: string; reason?: string }
   | { type: "status"; label: string; detail?: string }
   | { type: "token"; text: string }
   | { type: "citations"; citations: Citation[] }

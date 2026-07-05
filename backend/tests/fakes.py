@@ -7,8 +7,26 @@ the query graph + nodes. The generator is scripted so we can drive the critic lo
 from __future__ import annotations
 
 from app.core.config import Settings
-from app.domain.models import ScoredPoint, SparseVector
+from app.domain.models import BlameSpan, FileAuthorship, ScoredPoint, SparseVector
 from app.services.query.state import Deps
+
+
+class FakeAuthorship:
+    """Scripted authorship: maps path → FileAuthorship. enabled toggles dev-search on/off."""
+
+    def __init__(self, by_path: dict[str, FileAuthorship] | None = None, enabled: bool = True):
+        self._by_path = by_path or {}
+        self._enabled = enabled
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
+    async def file_authorship(self, ctx, path: str) -> FileAuthorship | None:
+        return self._by_path.get(path)
+
+    async def blame_range(self, ctx, path: str, start: int, end: int) -> list[BlameSpan]:
+        return []
 
 
 class FakeEmbedder:
@@ -104,6 +122,7 @@ def make_deps(
     points: list[ScoredPoint],
     responses: list[str],
     graph_store: FakeGraphStore | None = None,
+    authorship: FakeAuthorship | None = None,
     **settings_overrides,
 ) -> Deps:
     settings = Settings(rerank_enabled=False, **settings_overrides)
@@ -114,4 +133,5 @@ def make_deps(
         generator=FakeGenerator(responses),
         graph_store=graph_store or FakeGraphStore(),
         settings=settings,
+        authorship=authorship or FakeAuthorship(),
     )
