@@ -17,4 +17,5 @@ export const C = {
 export const mono = "'IBM Plex Mono', monospace";
 export const sans = "'IBM Plex Sans', system-ui, sans-serif";
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+// Default `/api` hits the Next.js rewrite proxy (see next.config.mjs) — same-origin, no CORS.
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "/api";
