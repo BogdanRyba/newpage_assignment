@@ -1,13 +1,15 @@
 """Seeder: idempotently ingest the bundled sample repo so the demo works immediately.
 
 Runs the ingest pipeline inline (no worker needed) against `sample_repo/`. Skips if a
-ready "sample" repo already exists, or if no embedding key is configured (the app needs a
-Gemini key to function — without it we skip rather than fail noisily).
+ready "sample" repo already exists. When no Gemini key is configured, falls back to the
+offline demo path (local embedder + cassette replay) so `docker compose up` works out of
+the box.
 """
 
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 
 from sqlalchemy import select
@@ -25,11 +27,17 @@ SAMPLE_PATH = Path(__file__).resolve().parents[2] / "sample_repo"
 SAMPLE_NAME = "notes-service"
 
 
+def ensure_demo_credentials() -> None:
+    """Fall back to offline demo mode when Gemini is selected but no key is set."""
+    if os.getenv("EMBEDDING_PROVIDER", "gemini") == "gemini" and not os.getenv("GEMINI_API_KEY"):
+        os.environ["EMBEDDING_PROVIDER"] = "local"
+        if os.getenv("CASSETTE_MODE", "off") == "off":
+            os.environ["CASSETTE_MODE"] = "replay"
+        get_settings.cache_clear()
+
+
 async def main() -> None:
-    settings = get_settings()
-    if settings.embedding_provider == "gemini" and not settings.gemini_api_key:
-        log.info("seed_skipped", reason="no GEMINI_API_KEY set — set it in .env to seed the demo")
-        return
+    ensure_demo_credentials()
     if not SAMPLE_PATH.exists():
         log.info("seed_skipped", reason=f"sample repo not found at {SAMPLE_PATH}")
         return

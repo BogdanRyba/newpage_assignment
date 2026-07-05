@@ -5,32 +5,73 @@ and get answers where **every claim is cited to exact `path:line` ranges** you c
 the source. The product is *Ariadne* (the thread of trust between you and the code); the in-product
 agent is *Daedalus* (the LangGraph graph that "built the labyrinth and knows every corner").
 
-> **A note on this README.** The factual sections below (setup, architecture, decisions, how the AI
-> tooling was used) describe what was actually built and verified. Section (i) — *Reflections* — is
-> intentionally left for me to write in my own voice, as the assignment asks. Deep-dives live in
-> [`docs/`](docs/); the decision log is [`docs/DECISIONS.md`](docs/DECISIONS.md).
+> **A note on this README.** The factual sections below describe what was built and verified.
+> Section (i) — *Reflections* — is written in my own voice, as the assignment asks.
+> Deep-dives live in [`docs/`](docs/); the decision log is [`docs/DECISIONS.md`](docs/DECISIONS.md).
+
+---
+
+## For reviewers (60-second demo)
+
+No API key required — the default stack runs offline (local embedder + cassette replay).
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+Wait for `seed` to finish (bundled `notes-service` ingest), then open **http://localhost:3000**:
+
+1. Click **Sample → ariadne-sample** (opens the seeded repo)
+2. Ask: *"How does NoteStore search for notes?"*
+3. Click a `[n]` citation in the answer → source panel highlights the exact lines
+
+Screenshots of this flow: [`docs/assets/`](docs/assets/). Demo video: [`docs/assets/demo.webm`](docs/assets/demo.webm)
+(if present). To regenerate: `bash scripts/capture-screenshots.sh`.
+
+**Live answers** (real Gemini): set `GEMINI_API_KEY` in `.env`, then
+`EMBEDDING_PROVIDER=gemini` and `CASSETTE_MODE=off`, and restart compose.
+
+**Full browser E2E** (real ingest + Gemini, ~5 min): `bash scripts/e2e.sh` (requires a key).
+
+> **Note:** Your browser at **http://localhost:3000** must talk to **`http://localhost:8000`**
+> (the default). `http://api:8000` only works *inside* the Docker network — it is set temporarily
+> by `scripts/capture-screenshots.sh` and `scripts/e2e.sh`, then restored. If requests fail with
+> `api:8000` in DevTools, run:
+> `NEXT_PUBLIC_API_BASE=http://localhost:8000 docker compose up -d frontend`
+
+---
+
+## Screenshots
+
+| Ingest | Chat + citations | Source panel |
+|--------|------------------|--------------|
+| ![Ingest screen](docs/assets/01-ingest.png) | ![Chat with citations](docs/assets/02-chat-citations.png) | ![Source panel](docs/assets/03-source-panel.png) |
+
+Demo walkthrough (optional): [demo.webm](docs/assets/demo.webm)
 
 ---
 
 ## (a) Setup
 
-**Prerequisites:** Docker + Docker Compose. A Gemini API key for live answers (optional — see offline mode).
+**Prerequisites:** Docker + Docker Compose. Works out of the box with **no API key** (offline demo).
+Add a Gemini key only if you want live LLM answers.
 
 ```bash
-cp .env.example .env          # add GEMINI_API_KEY for live chat
+cp .env.example .env          # defaults: EMBEDDING_PROVIDER=local, CASSETTE_MODE=replay
 docker compose up --build     # api :8000 · frontend :3000 · postgres · qdrant · redis · worker
 ```
 
 `migrate` applies the schema, `seed` ingests the bundled [`backend/sample_repo`](backend/sample_repo)
 (a small polyglot `notes-service`) so the demo works immediately. Open **http://localhost:3000**, click
-**Sample → notes-service**, and ask "How does NoteStore search for notes?". A packaged
+**Sample → ariadne-sample**, and ask "How does NoteStore search for notes?". A packaged
 `backend/sample_repo.zip` is also provided for the upload flow (`scripts/pack-fixture.sh` regenerates it).
 
-**Offline / no-key mode** (deterministic, zero credentials) — uses a local hashed embedder and
-replays recorded LLM cassettes:
+**Live mode** (real Gemini embeddings + synthesis):
 
 ```bash
-EMBEDDING_PROVIDER=local docker compose up --build      # ingest + retrieval work with no key
+# In .env: GEMINI_API_KEY=...  EMBEDDING_PROVIDER=gemini  CASSETTE_MODE=off
+docker compose up --build
 ```
 
 **Checks** (lint + types + deterministic tests + frontend):
@@ -133,7 +174,34 @@ regression tracking across prompt `VERSION`s.
 
 ## (i) Reflections
 
-> _(Written by me, in my own words — see the note at the top.)_
+I chose Option 2 because citations are the product. Document RAG can hand-wave; a code assistant
+has to point at real lines or it is useless. That `path:line` contract shaped every decision
+downstream — AST chunking for boundaries, hybrid retrieval because symbol names matter as much as
+semantics, and a generator-critic loop because I would rather refuse than invent a file reference.
+
+The trade-off I am most aware of is scope versus depth. I kept the MVP narrow: ingest one repo,
+answer with citations, ship in Docker. Graph augmentation, versioning, and authorship personas
+rode on seams I had already cut (ports, `RepoContext`, versioned prompts), not on redesigns. I left
+rerank off by default — it is CPU-heavy and retrieval was already acceptable on the sample repo —
+and invested instead in determinism: cassettes, a local embedder, and an eval gate. A demo that
+flakes in CI tells reviewers nothing.
+
+What surprised me was how much of the hard work was not the LLM. Chunk boundary quality, hybrid
+fusion without score-scale bugs, and citation validation in the critic mattered more than prompt
+tweaking. The prompts are first-class artifacts, but the guardrails around them — empty-retrieval
+refusal, fenced source blocks, adversarial tests — are what make the answers trustworthy.
+
+On AI tooling: Claude Code with hooks and skills was a multiplier for boilerplate and for holding
+standards I would otherwise forget mid-session. The PreToolUse hook that blocks green-washing tests
+paid for itself the first time a model tried `assert True`. I do not paste architecture sections
+from the model into the README; I use it to implement and test, then write the rationale myself.
+Skills encode procedures (how to add a LangGraph node, how to structure a prompt module);
+`CLAUDE.md` encodes invariants the model will violate if left unsupervised.
+
+If I had another day, I would stop at the citation hover-preview and a zip-upload button in the UI —
+polish that makes the citation loop feel instant — rather than more agent patterns. The assignment
+says they want approach over complexity; I would rather reviewers spend ten minutes on a working
+demo than reading about an orchestrator they cannot click.
 
 ---
 
