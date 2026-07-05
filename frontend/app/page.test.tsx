@@ -23,7 +23,7 @@ vi.mock("./lib/api", () => ({
   compareVersions: (...a: unknown[]) => compareVersions(...a),
   searchDeveloper: (...a: unknown[]) => searchDeveloper(...a),
   sourceRawUrl: (id: string, path: string) =>
-    `http://localhost:8000/repos/${id}/source/raw?path=${encodeURIComponent(path)}`,
+    `/api/repos/${id}/source/raw?path=${encodeURIComponent(path)}`,
   getRepo: vi.fn(),
   createRepo: vi.fn(),
   streamIngest: vi.fn(() => () => {}),

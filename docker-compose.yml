@@ -107,7 +107,9 @@ services:
     build: ./frontend
     command: npm run dev
     environment:
-      NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-http://localhost:8000}
+      # Browser → /api (same origin); Next rewrites to the api service on the compose network.
+      NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-/api}
+      BACKEND_URL: ${BACKEND_URL:-http://api:8000}
     ports: ["3000:3000"]
     volumes: ["./frontend:/app", "/app/node_modules", "/app/.next"]
     depends_on:

@@ -1,17 +1,9 @@
 #!/usr/bin/env bash
 # Capture README screenshots from the running stack.
-# Uses NEXT_PUBLIC_API_BASE=http://api:8000 only inside the Playwright container; always restores
-# the host-browser default (localhost:8000) on exit.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 mkdir -p docs/assets tests/e2e/test-results
-
-restore_host_frontend() {
-  echo "== restoring host demo (frontend → localhost:8000) =="
-  NEXT_PUBLIC_API_BASE=http://localhost:8000 docker compose up -d frontend >/dev/null 2>&1 || true
-}
-trap restore_host_frontend EXIT
 
 has_gemini_key() {
   if [ -n "${GEMINI_API_KEY:-}" ]; then
@@ -21,7 +13,6 @@ has_gemini_key() {
 }
 
 echo "== bringing up stack for screenshots =="
-export NEXT_PUBLIC_API_BASE="http://api:8000"
 if has_gemini_key; then
   echo "   (live mode — using .env credentials; indexed repo must already exist)"
   docker compose up -d --build postgres qdrant redis migrate api worker seed frontend

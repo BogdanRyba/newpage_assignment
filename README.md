@@ -34,11 +34,9 @@ Screenshots of this flow: [`docs/assets/`](docs/assets/). Demo video: [`docs/ass
 
 **Full browser E2E** (real ingest + Gemini, ~5 min): `bash scripts/e2e.sh` (requires a key).
 
-> **Note:** Your browser at **http://localhost:3000** must talk to **`http://localhost:8000`**
-> (the default). `http://api:8000` only works *inside* the Docker network — it is set temporarily
-> by `scripts/capture-screenshots.sh` and `scripts/e2e.sh`, then restored. If requests fail with
-> `api:8000` in DevTools, run:
-> `NEXT_PUBLIC_API_BASE=http://localhost:8000 docker compose up -d frontend`
+The UI calls **`/api/*` on the same origin** (port 3000); Next.js rewrites those requests to the
+FastAPI service (`BACKEND_URL=http://api:8000` inside compose). No cross-origin calls, no CORS setup
+needed in the browser.
 
 ---
 
